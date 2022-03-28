@@ -34,7 +34,7 @@ Two drop down menus in the main window are used to assign a label to the image b
 How many images have been already annotated is represented by a loading bar as well as by a message in the "Messages" box. The "Draw Line" checkbox allows to draw lines on the current image instead of moving/define landmarks; if selected, two clicks on different positions of the image will create a line connecting them and extending to the edges of the image.
 
 #### 4. Keyboard shortcuts
--'Ctrl + 2' loops through the landmarks
--'Ctrl + b' or 'f', 'p', 'b' set the image quality to good, fair, poor and bad.
--'Ctrl+a' sets the Image Annotated field to 'Yes'
--'Ctrl+s' save changes to the project.
+1. 'Ctrl + 2' loops through the landmarks.
+2. 'Ctrl + b' or 'f', 'p', 'b' set the image quality to good, fair, poor and bad.
+3. 'Ctrl+a' sets the Image Annotated field to 'Yes'
+4. 'Ctrl+s' save changes to the project.
