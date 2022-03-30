@@ -21,17 +21,18 @@ How To Use the GUI
 #### 1. Create a new project
 
 A new project consists of a set of images and a model. A model consists of a reference image and a .csv file containing the names and positions of the landmarks on the reference image, an example model is provided.
-Clicking on "Create new project" will open a new window that guides the user in the creation of a new project folder and will automatically generate the relevant files. ( Note: the original raw images for a project are not copied in the project folder but remain sat their original location. )
+Clicking on "Create new project" will open a new window that guides the user in the creation of a new project folder and will automatically generate the relevant files. ( Note: the original raw images for a project are not copied in the project folder but remain at their original location. )
 
 
 #### 2. Open a project
 Either type, or click on "Browse", to provide the path to a project folder, then click on "Load selected project". The first image in the dataset is visualized in the main graph element of the window, while the reference model image is visualized in the smaller graph element. A new window is opened, which allows to select the landmarks present in the current project.
 
 
-#### 3. Navigate through the dataset and place landmarks and annotations.
-The buttons "Next", "Previous" and "Next not annotated" are used top navigate through the dataset. Selecting a landmark in the landmark window will show the position of that landmark in the reference image, as well as on the current image if it has been already defined. To define or modify the position of the landmark o the current image just click on the image.
+#### 3. Navigate through the dataset and place landmarks and annotations
+The buttons "Next", "Previous" and "Next not annotated" are used to navigate through the dataset. Selecting a landmark in the landmark window will highlight the position of that landmark in the reference image, as well as on the current image, if it has been already defined. To define or modify the position of the landmark on the current image just click on the image.
 Two drop down menus in the main window are used to assign a label to the image based on its quality (good/fair/poor/bad) and to confirm if the annotation of the image is complete ("Yes/No").
-How many images have been already annotated is represented by a loading bar as well as by a message in the "Messages" box. The "Draw Line" checkbox allows to draw lines on the current image instead of moving/define landmarks; if selected, two clicks on different positions of the image will create a line connecting them and extending to the edges of the image.
+How many images in the dataset have been already annotated is shown by a loading bar as well as by a message in the "Messages" box. 
+The "Draw Line" checkbox allows drawing lines on the current image instead of moving/defining landmarks; if selected, two clicks on different positions of the image will create a line connecting them and extending to the edges of the image.
 
 #### 4. Keyboard shortcuts
 1. 'Ctrl + 2' loops through the landmarks.
