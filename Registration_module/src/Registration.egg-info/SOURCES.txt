@@ -1,0 +1,12 @@
+LICENSE
+README.md
+pyproject.toml
+src/Registration/TPS.py
+src/Registration/__init__.py
+src/Registration/pytorch.py
+src/Registration/snake.py
+src/Registration/thinplate.py
+src/Registration.egg-info/PKG-INFO
+src/Registration.egg-info/SOURCES.txt
+src/Registration.egg-info/dependency_links.txt
+src/Registration.egg-info/top_level.txt
