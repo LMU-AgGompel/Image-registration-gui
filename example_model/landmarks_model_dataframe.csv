@@ -1,0 +1,13 @@
+,Unnamed: 0,type,name,target
+0,0,landmark,LV2-end,"[427,504]"
+1,1,landmark,LV3-end,"[215,681]"
+2,2,landmark,LV4-end,"[251,775]"
+3,3,landmark,LV5-end,"[638, 961]"
+4,4,landmark,LV5-PCV,"[763, 843]"
+5,5,landmark,LV4-PCV,"[748, 763]"
+6,6,landmark,LV4-ACV,"[934, 717]"
+7,7,landmark,LV3-ACV,"[931, 686]"
+8,8,landmark,LV2-LV3,"[1069, 667]"
+9,9,landmark,LV1-LV0,"[1016, 591]"
+10,10,landmark,LV6-LV5,"[1118, 748]"
+11,11,landmark,Extrap_1,"[994, 963]"

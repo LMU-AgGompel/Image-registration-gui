@@ -449,6 +449,49 @@ def create_new_project():
     
     return
 
+def select_image(shared, df_files):
+    """
+    Function used to jump to a specific imag ein the current project.
+    It creates a pop-up window and allows to search among all the file names 
+    included in the current project.
+    It returns an updated 'shared' dictionary where the index of the current image 
+    has been updated to point to the selected file name.
+          
+    """
+    try:
+        names = df_files["file name"].values
+    except:
+        names = []
+    
+    layout = [  [sg.Text('Search an image:')],
+            [sg.Input(do_not_clear=True, size=(20,1),enable_events=True, key='_INPUT_')],
+            [sg.Listbox(names, size=(20,10), enable_events=True, key='_LIST_')],
+            [sg.Button('Exit')]]
+
+    select_image_window = sg.Window('Search').Layout(layout)
+    # Event Loop
+    while True:
+        event, values = select_image_window.Read()
+        if event is None or event == 'Exit':                # always check for closed window
+            break
+        if values['_INPUT_'] != '':                         # if a keystroke entered in search field
+            search = values['_INPUT_']
+            new_values = [x for x in names if search in x] 
+            select_image_window.Element('_LIST_').Update(new_values)
+        else:
+            select_image_window.Element('_LIST_').Update(names)
+        if event == '_LIST_' and len(values['_LIST_']):    
+            chosen_file = values['_LIST_'][0]
+            sg.Popup('Selected ', chosen_file)
+            index = 0
+            try:
+                index = int( df_files[df_files["file name"]==chosen_file].index[0] )
+            except:
+                pass
+            shared['im_index'] = index
+            
+    select_image_window.Close()
+    return shared
 
 def make_main_window(size, graph_canvas_width):
     """
@@ -480,7 +523,8 @@ def make_main_window(size, graph_canvas_width):
                     ]
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 
-                     sg.Text("", key="-CURRENT-IMAGE-", size=(50, 1))],
+                     sg.Text("", key="-CURRENT-IMAGE-", size=(35, 1)),
+                     sg.Button("Select image", key="-SELECT-IMAGE-")],
                     [sg.Checkbox('Normalize the image preview', key="-NORMALIZATION-", default=True, enable_events=True),
                      sg.Text("Change Brightness:", size=(20, 1)), 
                      sg.Slider(range=(1, 100), key = "-BRIGHTNESS-", orientation='h', size=(15, 20), default_value=100, enable_events=True,  disable_number_display=True)],
