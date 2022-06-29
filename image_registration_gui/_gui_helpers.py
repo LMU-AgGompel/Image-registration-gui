@@ -414,7 +414,7 @@ def create_new_project():
             
             df_files = df_files.drop_duplicates(subset='file name', keep="first")
             
-            df_files.to_csv(os.path.join(project_folder, df_files_name))
+            df_files.to_csv(os.path.join(project_folder, df_files_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names created.')
             
             reference_image_path = values['-NEW-REF-IMAGE-']
@@ -428,7 +428,7 @@ def create_new_project():
             
             new_model_path = values['-NEW-MODEL-FILE-']
             df_model = pd.read_csv(new_model_path)
-            df_model.to_csv(os.path.join(project_folder, df_model_name))
+            df_model.to_csv(os.path.join(project_folder, df_model_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe with model information copied in the project folder.')
             
             try:
@@ -437,7 +437,7 @@ def create_new_project():
                 for landmark in landmark_names:
                     df_landmarks[landmark] = np.nan
                 
-                df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+                df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index=False)
                 dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates created.')
             except:
                 dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the creation of the landmarks dataframe.')
