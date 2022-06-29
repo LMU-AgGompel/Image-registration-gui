@@ -449,6 +449,77 @@ def create_new_project():
     
     return
 
+def add_new_images(shared, df_files, df_landmarks, df_model):
+    """
+    Function used to add new images to an existing project
+          
+    """
+    
+    # GUI - Define a new window to collect input:
+    layout = [             
+              [sg.Text("New image files extension: ", size=(20, 1)),
+               sg.Input(size=(25,8), enable_events=True,  key='-IMAGE-EXTENSION-')],
+              
+              [sg.Text('New images location: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-NEW-IMAGES-FOLDER-'),
+               sg.FolderBrowse()], 
+              
+              [sg.Button("Update the project: ", size = (20,1), key="-UPDATE-PROJECT-")],
+              
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              
+              ]
+    
+    add_images_window = sg.Window("Add new images", layout, modal=True)
+    choice = None
+    
+    while True:
+        event, values = add_images_window.read()
+
+        if event == '-UPDATE-PROJECT-':
+
+            project_folder = shared['proj_folder']
+        
+            extension = values['-IMAGE-EXTENSION-']
+            images_folder = values['-NEW-IMAGES-FOLDER-']
+            
+            temp_path = os.path.join(images_folder,r"**")
+            temp_path = os.path.join(temp_path,r"*."+extension)
+    
+            image_full_paths = glob.glob(temp_path, recursive=True)
+            image_names = [os.path.split(path)[1] for path in image_full_paths]
+            
+            dialog_box = add_images_window["-DIALOG-"]
+            dialog_box.update(value=dialog_box.get()+'\n - '+str(len(image_names))+' images found.')
+            
+            temp_df_files = pd.DataFrame({'file name':image_names,'full path':image_full_paths})
+            temp_df_files["image quality"] = "undefined"
+            temp_df_files["notes"] = "none"
+            temp_df_files["annotated"] = "No"
+            
+            df_files = pd.concat([df_files, temp_df_files])
+            df_files = df_files.drop_duplicates(subset='file name', keep="first")
+            df_files = df_files.reset_index(drop=True)
+            df_files.to_csv(os.path.join(project_folder, df_files_name))
+            dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names updated.')
+
+            landmark_names = df_model['name'].values
+            temp_df_landmarks = df_files[['file name']].copy()
+            for landmark in landmark_names:
+                temp_df_landmarks[landmark] = np.nan
+                
+            df_landmarks = pd.concat([df_landmarks, temp_df_files])
+            df_landmarks = df_landmarks.reset_index(drop=True)
+            df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+            dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates updated.')
+
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
+        
+    add_images_window.close()
+    
+    return df_files, df_landmarks
+
 def select_image(shared, df_files):
     """
     Function used to jump to a specific imag ein the current project.
@@ -516,10 +587,13 @@ def make_main_window(size, graph_canvas_width):
     # --------------------------------- Define Layout ---------------------------------
     
     selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
-                        sg.Input(size=(25,1), enable_events=True, key='-PROJECT-FOLDER-'),
-                        sg.FolderBrowse(),
-                        sg.Button("Load selected project", key='-LOAD-PROJECT-')],
-                       [sg.Button("Create new project: ", size = (20,1), key="-NEW-PROJECT-")]
+                        sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
+                        sg.FolderBrowse(size=(20,1)),
+                        sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-')],
+                       [sg.VPush()],
+                       [sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((175,0),(0,0))),
+                        sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
+                        sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]
                     ]
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 
