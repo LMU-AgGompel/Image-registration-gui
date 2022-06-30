@@ -104,9 +104,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
         
         if event == '-MERGE-PROJECTS-':
-            pass
-            # TO DO:
-            #merge_projects()
+            merge_projects()
             
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):
