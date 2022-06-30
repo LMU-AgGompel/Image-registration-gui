@@ -449,6 +449,183 @@ def create_new_project():
     
     return
 
+def merge_projects():
+    """
+    Function used to merge two existing projects.
+    It opens a new graphical window where the user sleect the paths to the two
+    proojects to merge and the path where to create the new project.
+
+    Finally, it creates all the new project files in the target folder.
+          
+    """
+    
+    # GUI - Define a new window to collect input:
+    layout = [[sg.Text("Project name: ", size=(20, 1)),
+               sg.Input(size=(25,8), enable_events=True,  key='-NEW-PROJECT-NAME-')],
+              
+              [sg.Text('Project location: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-NEW-PROJECT-FOLDER-'),
+               sg.FolderBrowse()],
+              
+              [sg.Text('Location of Project 1: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-PROJECT-FOLDER-1-'),
+               sg.FolderBrowse()], 
+              
+              [sg.Text('Location of Project 2: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-PROJECT-FOLDER-2-'),
+               sg.FolderBrowse()], 
+
+              [sg.Button("Create the project: ", size = (20,1), key="-CREATE-PROJECT-")],
+              
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              
+              ]
+    
+    merge_projects_window = sg.Window("Create New Project", layout, modal=True)
+    choice = None
+    
+
+    
+    while True:
+        event, values = merge_projects_window.read()
+
+        if event == '-CREATE-PROJECT-':
+            
+            ## Create the folder
+            parent_folder = values['-NEW-PROJECT-FOLDER-']
+            project_name  = values['-NEW-PROJECT-NAME-']
+            
+            project_folder = os.path.join(parent_folder, project_name)
+            
+            dialog_box = merge_projects_window["-DIALOG-"]
+            
+            if os.path.exists(project_folder):
+                dialog_box.update(value=dialog_box.get()+'\n - The project folder already exists.')
+                break
+            else:
+                os.mkdir(project_folder)
+                dialog_box.update(value=dialog_box.get()+'\n - New project folder has been created.')
+                
+            folder_1 = values['-PROJECT-FOLDER-1-']
+            
+            try:
+                df_files_1      = pd.read_csv( os.path.join(folder_1, df_files_name) )
+                df_landmarks_1  = pd.read_csv( os.path.join(folder_1, df_landmarks_name) )
+                df_model_1      = pd.read_csv( os.path.join(folder_1, df_model_name) )
+                reference_image_path = os.path.join(folder_1, ref_image_name)
+            except:
+                dialog_box.update(value=dialog_box.get()+'\n - Problem opening project files of the the first project.')
+                    
+            folder_2 = values['-PROJECT-FOLDER-2-']
+            
+            try:
+            
+                df_files_2      = pd.read_csv( os.path.join(folder_2, df_files_name) )
+                df_landmarks_2  = pd.read_csv( os.path.join(folder_2, df_landmarks_name) )
+                df_model_2      = pd.read_csv( os.path.join(folder_2, df_model_name) )
+            except:
+                dialog_box.update(value=dialog_box.get()+'\n - Problem opening project files of the the second project.')
+               
+            if set(df_landmarks_1.columns) == set(df_landmarks_2.columns):
+                
+                df_files = pd.concat([df_files_1, df_files_2])
+                df_files = df_files.drop_duplicates(subset='file name', keep="first")
+                
+                df_landmarks = pd.concat([df_landmarks_1, df_landmarks_2])
+                df_landmarks = df_landmarks.drop_duplicates(subset='file name', keep="first")     
+
+                try:
+                    new_ref_image_path = os.path.join(project_folder, ref_image_name)
+                    shutil.copy(reference_image_path, new_ref_image_path)
+                    df_files.to_csv(os.path.join(project_folder, df_files_name))
+                    df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+                    df_model_1.to_csv(os.path.join(project_folder, df_model_name))
+                    dialog_box.update(value=dialog_box.get()+'\n - Merged files saved in the destination folder.')
+                    
+                except:
+                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Error occurred while merging the files."')
+                
+            else:
+                dialog_box.update(value=dialog_box.get()+'\n - The projects are based on different models. Can not merge.')
+            
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
+        
+    merge_projects_window.close()
+    
+    return
+
+def add_new_images(shared, df_files, df_landmarks, df_model):
+    """
+    Function used to add new images to an existing project
+          
+    """
+    
+    # GUI - Define a new window to collect input:
+    layout = [             
+              [sg.Text("New image files extension: ", size=(20, 1)),
+               sg.Input(size=(25,8), enable_events=True,  key='-IMAGE-EXTENSION-')],
+              
+              [sg.Text('New images location: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-NEW-IMAGES-FOLDER-'),
+               sg.FolderBrowse()], 
+              
+              [sg.Button("Update the project: ", size = (20,1), key="-UPDATE-PROJECT-")],
+              
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              
+              ]
+    
+    add_images_window = sg.Window("Add new images", layout, modal=True)
+    choice = None
+    
+    while True:
+        event, values = add_images_window.read()
+
+        if event == '-UPDATE-PROJECT-':
+
+            project_folder = shared['proj_folder']
+        
+            extension = values['-IMAGE-EXTENSION-']
+            images_folder = values['-NEW-IMAGES-FOLDER-']
+            
+            temp_path = os.path.join(images_folder,r"**")
+            temp_path = os.path.join(temp_path,r"*."+extension)
+    
+            image_full_paths = glob.glob(temp_path, recursive=True)
+            image_names = [os.path.split(path)[1] for path in image_full_paths]
+            
+            dialog_box = add_images_window["-DIALOG-"]
+            dialog_box.update(value=dialog_box.get()+'\n - '+str(len(image_names))+' images found.')
+            
+            temp_df_files = pd.DataFrame({'file name':image_names,'full path':image_full_paths})
+            temp_df_files["image quality"] = "undefined"
+            temp_df_files["notes"] = "none"
+            temp_df_files["annotated"] = "No"
+            
+            df_files = pd.concat([df_files, temp_df_files])
+            df_files = df_files.drop_duplicates(subset='file name', keep="first")
+            df_files = df_files.reset_index(drop=True)
+            df_files.to_csv(os.path.join(project_folder, df_files_name))
+            dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names updated.')
+
+            landmark_names = df_model['name'].values
+            temp_df_landmarks = df_files[['file name']].copy()
+            for landmark in landmark_names:
+                temp_df_landmarks[landmark] = np.nan
+                
+            df_landmarks = pd.concat([df_landmarks, temp_df_files])
+            df_landmarks = df_landmarks.reset_index(drop=True)
+            df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+            dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates updated.')
+
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
+        
+    add_images_window.close()
+    
+    return df_files, df_landmarks
+
 def select_image(shared, df_files):
     """
     Function used to jump to a specific imag ein the current project.
@@ -516,10 +693,13 @@ def make_main_window(size, graph_canvas_width):
     # --------------------------------- Define Layout ---------------------------------
     
     selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
-                        sg.Input(size=(25,1), enable_events=True, key='-PROJECT-FOLDER-'),
-                        sg.FolderBrowse(),
-                        sg.Button("Load selected project", key='-LOAD-PROJECT-')],
-                       [sg.Button("Create new project: ", size = (20,1), key="-NEW-PROJECT-")]
+                        sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
+                        sg.FolderBrowse(size=(20,1)),
+                        sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-')],
+                       [sg.VPush()],
+                       [sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((175,0),(0,0))),
+                        sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
+                        sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]
                     ]
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 

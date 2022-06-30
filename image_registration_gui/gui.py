@@ -98,6 +98,14 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-NEW-PROJECT-':
             create_new_project()
             
+        if event == '-NEW-IMAGES-':
+            if  (df_files is not None) and (shared['im_index']>0):
+                df_files, df_landmarks = add_new_images(shared, df_files, df_landmarks, df_model)
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
+        
+        if event == '-MERGE-PROJECTS-':
+            merge_projects()
+            
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):
                 shared = select_image(shared, df_files)
