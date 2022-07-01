@@ -13,7 +13,7 @@ How To Run This
 1. Download the package and extract it into a local directory.
 2. cd into the root directory where setup.py is located 
 3. Run 'python setup.py install'
-4. You can now 'import image_annotation_gui' from any python terminal and run 'image_annotation_gui.start()' to start the graphical interface.
+4. You can now 'import image_registration' from any python terminal and run 'image_registration.gui.start()' to start the graphical interface.
 
 How To Use the GUI
 ------------------

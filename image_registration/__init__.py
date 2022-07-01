@@ -11,4 +11,6 @@ __version__ = "0.1.0"
 __author__ = 'Stefano Ceolin'
 
 
-from image_registration_gui.gui import start_image_registration_GUI as start
+from image_registration.gui.gui import start_image_registration_GUI as start
+from image_registration.registration.TPS import TPSwarping as TPSwarping
+

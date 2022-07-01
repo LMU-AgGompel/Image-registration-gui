@@ -5,9 +5,8 @@ Created on Fri Mar 25 18:13:00 2022
 
 @author: ceolin
 """
+import image_registration
 
-import image_registration_gui as gui
-
-gui.start(main_window_size = (1400,1100), graph_canvas_width = 700)
+image_registration.gui.start(main_window_size = (1400,1100), graph_canvas_width = 700)
 
 print("Hello")

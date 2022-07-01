@@ -8,6 +8,9 @@ import pandas as pd
 import numpy as np
 import ast
 from datetime import datetime
+import cv2
+import matplotlib.pyplot as plt
+from ..registration.TPS import TPSwarping
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -329,6 +332,7 @@ def update_progress_bar(df_files, window):
     window["-PRINT-"].update(str(n_annotated)+" annotated images out of "+str(n_not_annotated+n_annotated) )
     return   
 
+
 def create_new_project():
     """
     Function used to create a new project.
@@ -389,6 +393,9 @@ def create_new_project():
             
             dialog_box = new_project_window["-DIALOG-"]
             
+
+            dialog_box = new_project_window["-DIALOG-"]
+            
             if os.path.exists(project_folder):
                 dialog_box.update(value=dialog_box.get()+'\n - The project folder already exists.')
                 break
@@ -414,6 +421,7 @@ def create_new_project():
             
             df_files = df_files.drop_duplicates(subset='file name', keep="first")
             
+            df_files.to_csv(os.path.join(project_folder, df_files_name))
             df_files.to_csv(os.path.join(project_folder, df_files_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names created.')
             
@@ -428,6 +436,7 @@ def create_new_project():
             
             new_model_path = values['-NEW-MODEL-FILE-']
             df_model = pd.read_csv(new_model_path)
+            df_model.to_csv(os.path.join(project_folder, df_model_name))
             df_model.to_csv(os.path.join(project_folder, df_model_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe with model information copied in the project folder.')
             
@@ -437,6 +446,7 @@ def create_new_project():
                 for landmark in landmark_names:
                     df_landmarks[landmark] = np.nan
                 
+                df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
                 df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index=False)
                 dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates created.')
             except:
@@ -445,6 +455,124 @@ def create_new_project():
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
         
+    new_project_window.close()
+    
+    return
+
+
+def create_registration_window(shared,df_landmarks,df_model,df_files):
+    """
+    Function used to create a new project.
+    It opens a new graphical window and collects from the user the info required
+    for the creation of a new project: 
+        
+        - the project location
+        - a folder of raw images
+        - a reference image
+        - a model file containig the definitions of the landmarks to be used by
+          the project
+          
+    Finally, it creates all the new project files in the target folder.
+          
+    """
+    
+    # GUI - Define a new window to collect input:
+    layout = [[sg.Text('Location of the images to register: ', size=(30, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-IMAGES-FOLDER-'),
+               sg.FolderBrowse()],
+              [sg.Text('Where to save the registered images ', size=(35, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
+               sg.FolderBrowse()],
+              [sg.Text('Image resolution (%)',size=(20,1)),
+              sg.Slider(orientation ='horizontal', key='-REGISTRATION-RESOLUTION-', range=(1,100),default_value=100)],
+              [sg.Button("Register the images ", size = (10,1), key="-REGISTRATION-SAVE-")],
+              [sg.ProgressBar(max_value=100, size=(30,10), key= "-PROGRESS-")],
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              ]
+    
+    new_project_window = sg.Window("Register the annotated images", layout, modal=True)
+    choice = None
+    dialog_box = new_project_window["-DIALOG-"]
+    
+    while True:
+        event, values = new_project_window.read()
+        
+        if event == '-REGISTRATION-SAVE-':
+
+            # getting the path/directory of the images and where they will be saved
+            folder_dir = values['-IMAGES-FOLDER-']
+            df_files   = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name) )
+            
+            try:
+                _, _, files = next(os.walk(folder_dir))
+                file_count = len(files)
+                os.chdir(values['-REGISTERED-IMAGES-FOLDER-'])
+                
+            except: 
+                dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Missing path input.')
+                break
+            
+            i=0
+            # Getting reference landmarks
+            c_dst=[]
+            landmarks_list = df_model["name"].values
+            for landmark in shared['list_landmarks']:
+                [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
+                c_dst.append([x,y])
+            c_dst = np.reshape(c_dst,(len(c_dst),2))
+            shape = shared['ref_image'].size
+            c_dst = c_dst/np.asarray(shape)
+            
+            # get images and their landmarks
+            for images in os.listdir(folder_dir):
+                
+                shared['curr_image'] = open_image(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
+                img = cv2.imread(folder_dir + '/' + images)
+                
+                # get image landmarks
+                c_src=[]
+                
+                shared['curr_file'] = df_files.loc[(shared['im_index']-1)%file_count,"file name"]
+                
+                for LM in landmarks_list:
+                    
+                   
+                    LM_position = df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], LM].values[0]
+                    c_src.append(ast.literal_eval(LM_position))
+                    np.reshape(c_src,(len(c_src),2))
+                    
+                
+                shape = shared['curr_image'].size
+                c_src = c_src/np.asarray([img.shape[1],img.shape[0]])
+                
+                # Apply tps 
+                warped = TPSwarping(img, c_src, c_dst, img.shape[0:2])
+                
+                # Resize the image according to the slider value
+                size = img.shape[0:2]*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
+                size = [int(x) for x in size]
+                warped = cv2.resize(warped,(size[1],size[0]))
+                
+                # and save the image
+                try :
+                    cv2.imwrite(str(images) , warped)
+                
+                    shared['im_index'] -= 1
+                    shared['im_index'] = (shared['im_index'])%file_count
+            
+                    dialog_box.update(value=dialog_box.get()+'\n - ' + str(shared['curr_file']) + ' has been registered')
+            
+                except:
+                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the registration of' + str(shared['curr_file']))
+            
+                # update the loading bar
+                i+=1
+                new_project_window["-PROGRESS-"].update((i/file_count)*100)
+            
+            dialog_box.update(value=dialog_box.get()+'\n - All of the images have been registered')
+            
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
     new_project_window.close()
     
     return
@@ -691,16 +819,16 @@ def make_main_window(size, graph_canvas_width):
     """
     
     # --------------------------------- Define Layout ---------------------------------
-    
+
     selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
                         sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
                         sg.FolderBrowse(size=(20,1)),
                         sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-')],
                        [sg.VPush()],
-                       [sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((175,0),(0,0))),
+                       [sg.Button("Registration", size = (20,1), key="-REGISTRATION-"),
+                        sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((135,0),(0,0))),
                         sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
-                        sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]
-                    ]
+                        sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]]
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 
                      sg.Text("", key="-CURRENT-IMAGE-", size=(35, 1)),
