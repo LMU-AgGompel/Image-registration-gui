@@ -9,8 +9,10 @@ import numpy as np
 import ast
 from datetime import datetime
 import cv2
-import matplotlib.pyplot as plt
 from ..registration.TPS import TPSwarping
+from skimage.filters import gaussian
+from skimage.segmentation import active_contour
+from skimage.filters import difference_of_gaussians
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -332,6 +334,58 @@ def update_progress_bar(df_files, window):
     window["-PRINT-"].update(str(n_annotated)+" annotated images out of "+str(n_not_annotated+n_annotated) )
     return   
 
+def rebin(img, binning):
+    img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    width = int(img.shape[1] / binning)
+    height = int(img.shape[0] / binning)
+    dim = (width, height)
+    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    return resized
+
+
+def enhance_edges(img, binning, smoothing):
+    img = rebin(img, binning)
+    filtered_image = difference_of_gaussians(img, 2, 10)
+    filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
+    filtered_image = 1 -filtered_image
+    edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
+    edges = gaussian(edges, smoothing, preserve_range=False)
+    return edges
+
+#Issue with point spacing : if point spacing > lenght between the two points -> error
+def snake_contour(img, p1_x, p1_y, p2_x, p2_y, N = None, points_spacing = 30, binning=5, smoothing=2, alpha=0.1):
+    distance = np.sqrt((p1_x-p2_x)**2+(p1_y-p2_y)**2)
+    n_points = N or int(distance/points_spacing)
+
+    r = np.linspace(p1_y, p2_y, n_points)/binning
+    c = np.linspace(p1_x, p2_x, n_points)/binning
+        
+    init = np.array([r, c]).T
+    img = enhance_edges(img, binning, smoothing)
+    snake = active_contour(img,
+                   init, boundary_condition='fixed', coordinates='rc', 
+                   alpha=alpha, beta=0.1, w_line=-5, w_edge=0, gamma= 0.1)
+    return snake*binning
+    
+
+def snake(img, df_model, df_lines):
+   
+    LM = []
+    N=[]
+    for i in range(len(df_lines["Lmk1"])):
+        lm1 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk1"][i], "target"].values[0])
+        lm2 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk2"][i], "target"].values[0])
+        alpha = (df_lines.loc[df_lines["Lmk1"][i]==df_model["name"], "alpha"])
+        alpha = alpha.iloc[0]
+        snk = snake_contour(img,lm1[0],lm1[1],lm2[0],lm2[1],alpha=alpha)
+        LM.extend(snk)
+        N.append(len(snk))
+    return LM,N
+
+# for i in range(len(df["Lmk1"])):
+#     plt.plot(np.array(LM[i])[:,1],np.array(LM[i])[:,0])
+
+# plt.imshow(img)
 
 def create_new_project():
     """
@@ -462,25 +516,19 @@ def create_new_project():
 
 def create_registration_window(shared,df_landmarks,df_model,df_files):
     """
-    Function used to create a new project.
+    Function used to register selected images.
     It opens a new graphical window and collects from the user the info required
-    for the creation of a new project: 
+    for the creation of the registered images: 
         
-        - the project location
-        - a folder of raw images
-        - a reference image
-        - a model file containig the definitions of the landmarks to be used by
-          the project
+        - the images location
+        - a folder to save the registered images
+        - a slider to define the output images definition
           
-    Finally, it creates all the new project files in the target folder.
+    Finally, it creates all the new images in the target folder.
           
     """
-    
     # GUI - Define a new window to collect input:
-    layout = [[sg.Text('Location of the images to register: ', size=(30, 1)), 
-               sg.Input(size=(25,8), enable_events=True, key='-IMAGES-FOLDER-'),
-               sg.FolderBrowse()],
-              [sg.Text('Where to save the registered images ', size=(35, 1)), 
+    layout = [[sg.Text('Where to save the registered images ', size=(35, 1)), 
                sg.Input(size=(25,8), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
                sg.FolderBrowse()],
               [sg.Text('Image resolution (%)',size=(20,1)),
@@ -490,18 +538,18 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
               [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
               ]
     
+    
+    df_files = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name))
     new_project_window = sg.Window("Register the annotated images", layout, modal=True)
     choice = None
     dialog_box = new_project_window["-DIALOG-"]
     
     while True:
         event, values = new_project_window.read()
-        
         if event == '-REGISTRATION-SAVE-':
 
-            # getting the path/directory of the images and where they will be saved
-            folder_dir = values['-IMAGES-FOLDER-']
-            df_files   = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name) )
+            # getting the path/directory of the images using a path of the csv file
+            folder_dir = str(os.path.dirname(df_files["full path"][0]))
             
             try:
                 _, _, files = next(os.walk(folder_dir))
@@ -512,62 +560,59 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                 dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Missing path input.')
                 break
             
-            i=0
+            progress_bar=0
             # Getting reference landmarks
             c_dst=[]
+            img = shared['ref_image']
             landmarks_list = df_model["name"].values
             for landmark in shared['list_landmarks']:
                 [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
                 c_dst.append([x,y])
+
             c_dst = np.reshape(c_dst,(len(c_dst),2))
             shape = shared['ref_image'].size
             c_dst = c_dst/np.asarray(shape)
             
+
             # get images and their landmarks
             for images in os.listdir(folder_dir):
+                path = df_files.loc[df_files["file name"]==str(images),"full path"].astype('string').values[0]
+                img = cv2.imread(str(path))
                 
-                shared['curr_image'] = open_image(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
-                img = cv2.imread(folder_dir + '/' + images)
                 
                 # get image landmarks
                 c_src=[]
-                
-                shared['curr_file'] = df_files.loc[(shared['im_index']-1)%file_count,"file name"]
-                
                 for LM in landmarks_list:
-                    
-                   
-                    LM_position = df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], LM].values[0]
+                    LM_position = df_landmarks.loc[df_landmarks["file name"]==str(images), LM].values[0]
                     c_src.append(ast.literal_eval(LM_position))
-                    np.reshape(c_src,(len(c_src),2))
                     
-                
-                shape = shared['curr_image'].size
+             
+                c_src = np.reshape(c_src,(len(c_src),2))
+                shape = img.size
                 c_src = c_src/np.asarray([img.shape[1],img.shape[0]])
                 
                 # Apply tps 
-                warped = TPSwarping(img, c_src, c_dst, img.shape[0:2])
                 
-                # Resize the image according to the slider value
-                size = img.shape[0:2]*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
-                size = [int(x) for x in size]
-                warped = cv2.resize(warped,(size[1],size[0]))
+                warped = TPSwarping(img, c_src, c_dst, img.shape[0:2])
                 
                 # and save the image
                 try :
+                    
+                    # Resize the image according to the slider value
+                    size = warped.shape[0:2]*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
+                    size = [int(x) for x in size]
+                    warped = cv2.resize(warped,(size[1],size[0]))
+                    
                     cv2.imwrite(str(images) , warped)
-                
-                    shared['im_index'] -= 1
-                    shared['im_index'] = (shared['im_index'])%file_count
             
-                    dialog_box.update(value=dialog_box.get()+'\n - ' + str(shared['curr_file']) + ' has been registered')
+                    dialog_box.update(value=dialog_box.get()+'\n - ' + str(images) + ' has been registered')
             
                 except:
-                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the registration of' + str(shared['curr_file']))
-            
+                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the registration of' + str(images))
+                    
                 # update the loading bar
-                i+=1
-                new_project_window["-PROGRESS-"].update((i/file_count)*100)
+                progress_bar+=1
+                new_project_window["-PROGRESS-"].update((progress_bar/file_count)*100)
             
             dialog_box.update(value=dialog_box.get()+'\n - All of the images have been registered')
             
