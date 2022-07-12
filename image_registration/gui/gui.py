@@ -111,8 +111,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-REGISTRATION-':
             create_registration_window(shared,df_landmarks,df_model,df_files)
         
-        if event == '-MERGE-PROJECTS-':
-            merge_projects()
+        if event == '-CNN-CREATE-':
+            X_train, X_test, y_train, y_test = initialize_CNN(shared,values['-IMG-FOLDER-'],df_landmarks,df_files,df_model)
+            print(create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], 2, nb_batch_size= 4))
             
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):
@@ -162,6 +163,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared['curr_image'] = Image.fromarray(shared['curr_image'])
                 update_image(shared['curr_image'], main_window, graph_canvas_width)
                 
+        window['-DATA-AUG-'].update('Augment by ' + str(int(values['-DATA-NUM-'])) + ' times')
+        
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current
             # project.

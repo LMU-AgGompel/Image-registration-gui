@@ -2,6 +2,7 @@ import io
 import os
 import shutil
 import glob
+import math
 import PySimpleGUI as sg
 from PIL import Image
 import pandas as pd
@@ -10,9 +11,11 @@ import ast
 from datetime import datetime
 import cv2
 from ..registration.TPS import TPSwarping
+from skimage.color import rgb2gray
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
 from skimage.filters import difference_of_gaussians
+import matplotlib.pyplot as plt
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -353,7 +356,7 @@ def enhance_edges(img, binning, smoothing):
     return edges
 
 #Issue with point spacing : if point spacing > lenght between the two points -> error
-def snake_contour(img, p1_x, p1_y, p2_x, p2_y, N = None, points_spacing = 30, binning=5, smoothing=2, alpha=0.1):
+def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = None, points_spacing = 30, binning=2 ):
     distance = np.sqrt((p1_x-p2_x)**2+(p1_y-p2_y)**2)
     n_points = N or int(distance/points_spacing)
 
@@ -364,28 +367,9 @@ def snake_contour(img, p1_x, p1_y, p2_x, p2_y, N = None, points_spacing = 30, bi
     img = enhance_edges(img, binning, smoothing)
     snake = active_contour(img,
                    init, boundary_condition='fixed', coordinates='rc', 
-                   alpha=alpha, beta=0.1, w_line=-5, w_edge=0, gamma= 0.1)
+                   alpha=0.1, beta=1, w_line=-5, w_edge=0, gamma= 0.1)
     return snake*binning
     
-
-def snake(img, df_model, df_lines):
-   
-    LM = []
-    N=[]
-    for i in range(len(df_lines["Lmk1"])):
-        lm1 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk1"][i], "target"].values[0])
-        lm2 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk2"][i], "target"].values[0])
-        alpha = (df_lines.loc[df_lines["Lmk1"][i]==df_model["name"], "alpha"])
-        alpha = alpha.iloc[0]
-        snk = snake_contour(img,lm1[0],lm1[1],lm2[0],lm2[1],alpha=alpha)
-        LM.extend(snk)
-        N.append(len(snk))
-    return LM,N
-
-# for i in range(len(df["Lmk1"])):
-#     plt.plot(np.array(LM[i])[:,1],np.array(LM[i])[:,0])
-
-# plt.imshow(img)
 
 def create_new_project():
     """
@@ -527,27 +511,33 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
     Finally, it creates all the new images in the target folder.
           
     """
+    df_lines = pd.read_csv('/home/titouan/Image-registration-gui/test_data/example_project/lines_dataframe.csv')
     # GUI - Define a new window to collect input:
     layout = [[sg.Text('Where to save the registered images ', size=(35, 1)), 
                sg.Input(size=(25,8), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
                sg.FolderBrowse()],
+              [sg.Spin([i for i in range(1,10000)], initial_value=1,size=4, key = 'Alpha'), sg.Text(': Alpha'),
+               sg.Spin([i for i in range(1,10000)], initial_value=2,size=4, key = 'Smoothing'), sg.Text(': Smoothing'),
+               sg.Spin([i for i in range(-10000,10000)], initial_value=-5,size=4, key = 'w_lines'), sg.Text(': Attraction to white lines'), ],
               [sg.Text('Image resolution (%)',size=(20,1)),
               sg.Slider(orientation ='horizontal', key='-REGISTRATION-RESOLUTION-', range=(1,100),default_value=100)],
               [sg.Button("Register the images ", size = (10,1), key="-REGISTRATION-SAVE-")],
               [sg.ProgressBar(max_value=100, size=(30,10), key= "-PROGRESS-")],
-              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              [sg.Column(layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]],scrollable=True)]
               ]
     
     
     df_files = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name))
-    new_project_window = sg.Window("Register the annotated images", layout, modal=True)
+    registration_window = sg.Window("Register the annotated images", layout, modal=True)
     choice = None
-    dialog_box = new_project_window["-DIALOG-"]
+    dialog_box = registration_window["-DIALOG-"]
     
     while True:
-        event, values = new_project_window.read()
+        event, values = registration_window.read()
         if event == '-REGISTRATION-SAVE-':
-
+            alpha = values['Alpha']
+            smoothing = values['Smoothing']
+            w_line = values['w_lines']
             # getting the path/directory of the images using a path of the csv file
             folder_dir = str(os.path.dirname(df_files["full path"][0]))
             
@@ -558,24 +548,57 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                 
             except: 
                 dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Missing path input.')
-                break
             
             progress_bar=0
-            # Getting reference landmarks
+            # Getting reference landmarks + snake
             c_dst=[]
             img = shared['ref_image']
             landmarks_list = df_model["name"].values
             for landmark in shared['list_landmarks']:
                 [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
                 c_dst.append([x,y])
+            # Getting snake landmarks
+            LM = []
+            N=[]
+            for i in range(len(df_lines["Lmk1"])-6):
+            # for i in range(1):
+                LMref=[]
+                lm1 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk1"][i], "target"].values[0])
+                lm2 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk2"][i], "target"].values[0])
+                # alpha = (df_lines.loc[df_lines["Lmk1"][i]==df_model["name"], "alpha"])
+                # alpha = alpha.iloc[0]
 
-            c_dst = np.reshape(c_dst,(len(c_dst),2))
+                snk = snake_contour(img,lm1[1],lm1[0],lm2[1],lm2[0],alpha,smoothing,w_line)
+                if len(snk)>=10:
+                      x = math.ceil(len(snk)*1/3)
+                      snk = [snk[0]] + [snk[x]] + [snk[2*x]] + [snk[-1]]
+                      snk = [snk[x].tolist() for x in range(len(snk))]
+                      
+                LMref.append(snk[1:-1])
+                
+                N.append(len(snk))
+                c_dst.extend(LMref[0])
+            # c_dst = np.reshape(c_dst,(len(c_dst),2))
             shape = shared['ref_image'].size
             c_dst = c_dst/np.asarray(shape)
             
 
+            
+            
+            # Checking for missing landmarks
+            NanLandmarks = df_landmarks[df_landmarks.isnull().any(axis=1)]['file name'].values  
+            
             # get images and their landmarks
+            k=0
             for images in os.listdir(folder_dir):
+                if str(images) in NanLandmarks : 
+                    k+=1
+                    progress_bar += 1
+                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Landmark missing for ' + str(images) + ' it has been skipped')
+                    continue
+                else : 
+                    
+                    pass
                 path = df_files.loc[df_files["file name"]==str(images),"full path"].astype('string').values[0]
                 img = cv2.imread(str(path))
                 
@@ -583,28 +606,66 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                 # get image landmarks
                 c_src=[]
                 for LM in landmarks_list:
-                    LM_position = df_landmarks.loc[df_landmarks["file name"]==str(images), LM].values[0]
-                    c_src.append(ast.literal_eval(LM_position))
                     
-             
-                c_src = np.reshape(c_src,(len(c_src),2))
+                    LM_position = df_landmarks.loc[df_landmarks["file name"]==str(images), LM].values[0]
+                    try :
+                        c_src.append(ast.literal_eval(LM_position))
+                    except :
+                        continue
+                    
+                    
+                # Get snake image landmarks
+
+                # for k in range(len(df_files["file name"])):
+                # for k in range(1):  
+                LM = []
+                for i in range(len(df_lines["Lmk1"])-6):
+                    LM = []
+                    df_landmarks.loc[df_landmarks["file name"] == df_files["file name"],"LV2-end"].values[0]
+                    lm1 = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"] == df_files["file name"][k],df_lines["Lmk1"][i]].values[0])
+                    lm2 = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"] == df_files["file name"][k],df_lines["Lmk2"][i]].values[0])
+                    # alpha = (df_lines.loc[df_lines["Lmk1"][i]==df_model["name"], "alpha"])
+
+                    snk = [snake_contour(img,lm1[1],lm1[0],lm2[1],lm2[0], alpha, smoothing, w_line, N=N[i])]
+
+                    snk = [snk[x].tolist() for x in range(len(snk))]
+                    
+                    LM.extend(snk)
+                    c_src.extend(LM[0][1:-1])
+                # c_src = np.reshape(c_src,(len(c_src),2))
                 shape = img.size
                 c_src = c_src/np.asarray([img.shape[1],img.shape[0]])
                 
+                # Resize the image according to the slider value
+                size = img.shape[0:2]*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
+                size = [int(x) for x in size]
+                img = cv2.resize(img,(size[1],size[0]))
+                
+                
                 # Apply tps 
-                
-                warped = TPSwarping(img, c_src, c_dst, img.shape[0:2])
-                
+
+                try : 
+                    warped = TPSwarping(img, c_src, c_dst, img.shape[0:2])
+                except : 
+                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the warping of' + str(images))
+                    continue
                 # and save the image
-                try :
-                    
-                    # Resize the image according to the slider value
-                    size = warped.shape[0:2]*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
-                    size = [int(x) for x in size]
-                    warped = cv2.resize(warped,(size[1],size[0]))
-                    
-                    cv2.imwrite(str(images) , warped)
-            
+                # try :
+                # fig, ax = plt.subplots( nrows=1, ncols=3 )
+                # ref = shared['ref_image']
+                # ax[0].imshow(ref)
+                # ax[0].scatter(c_dst[:, 0]*ref.size[0], c_dst[:, 1]*ref.size[1], marker='+', color='red')
+                # ax[1].imshow(img)
+                # ax[1].scatter(c_src[:, 0]*img.shape[1], c_src[:, 1]*img.shape[0], marker='+', color='red')
+                # ax[2].imshow(warped)
+                # ax[2].scatter(c_dst[:, 0]*warped.shape[1], c_dst[:, 1]*warped.shape[0], marker='+', color='red')
+                # plt.savefig('/home/titouan/Image-registration-gui_snakes/test_data/example_registered/'+str(images)+str('.jpg'),dpi=300)
+                
+                k+=1
+                
+                cv2.imwrite(str(images) , warped)
+                
+                try:
                     dialog_box.update(value=dialog_box.get()+'\n - ' + str(images) + ' has been registered')
             
                 except:
@@ -612,15 +673,217 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                     
                 # update the loading bar
                 progress_bar+=1
-                new_project_window["-PROGRESS-"].update((progress_bar/file_count)*100)
+                registration_window["-PROGRESS-"].update((progress_bar/file_count)*100)
             
             dialog_box.update(value=dialog_box.get()+'\n - All of the images have been registered')
             
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
-    new_project_window.close()
+    registration_window.close()
     
     return
+
+from skimage import color
+from sklearn.model_selection import train_test_split
+import natsort
+from keras.models import Sequential
+from keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D
+from keras.layers.advanced_activations import LeakyReLU
+from keras.layers import Convolution2D
+
+def initialize_CNN(shared, path, df_landmarks, df_files, df_model, test_ratio=0.3):
+    '''
+    Function to initalize the data for the neural network
+
+    Parameters
+    ----------
+    shared : TYPE
+        DESCRIPTION.
+    df_landmarks : TYPE
+        DESCRIPTION.
+    df_files : TYPE
+        DESCRIPTION.
+    test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
+
+    Returns
+    -------
+    X_train : X coordinates array of training data
+    X_test : X coordinates array of testing data
+    y_train : y coordinates array of training data
+    y_test : y coordinates array of testing data
+
+    '''
+    # Importing files
+    print(df_landmarks)
+    training = df_landmarks
+    training = training.dropna()
+    training = training.reset_index()
+    print('cvs file loaded')
+    print(path)
+    folder_dir = path
+    
+    
+    landmarks_list = df_model["name"].values
+
+    
+    # get images and their landmarks
+    k=0
+    images_array = []
+    
+    os.chdir(folder_dir)
+    
+    for i in range(len(training["file name"])):
+    #importing the images and recoloring them as grayscale
+        images_array.append(color.rgb2gray(cv2.imread(training["file name"][i])))
+        # images_array[1].append(training["file name"][i])
+        
+        k+=1
+        
+    print('images loaded')
+        
+    # plot the images and landmarks for testing
+    # fig, ax = plt.subplots(1,2, figsize=(32,16))
+    # for i in range(2):
+    #     ax[i].axis('off')
+    #     ax[i].scatter(np.array(training.loc[i][0::2])/np.array([(7.5)]),np.array(training.loc[i][1::2])/np.array([(6.31640625)]),marker='+', c = 'red',s = 1000)
+    #     ax[i].imshow(images[i])
+    # plt.show()
+    i = 0
+    
+    training = training.drop(["file name"], axis=1)
+    # for lm in landmarks_list :
+    #     training
+        
+        
+    #     i+=1
+        
+    #Resizing the landmarks to fit the images
+    # for i in range(len(training.index)):
+    #     for j in range(0,len(training.columns)-1,2):
+    #         training.iloc[i][j] = training.iloc[i][j]/np.array([7.5])
+    #         training.iloc[i][j+1] = training.iloc[i][j+1]/np.array( [6.31640625])
+            
+    print('landmarks resized')
+            
+    X = np.asarray(images_array).reshape(len(training.index),647,768,1)
+
+
+    y2 = training.to_numpy()
+
+    print('arrays created')
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
+
+    print('training arrays separated')
+    return X_train, X_test, y_train, y_test
+
+def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, nb_batch_size= 16):
+    '''
+    Function that will create a neural network from training data
+
+    Parameters
+    ----------
+    X_train : X coordinates array of training data
+    X_test : X coordinates array of testing data
+    y_train : y coordinates array of training data
+    y_test : y coordinates array of testing data
+    model_folder : str, folder where to save the model
+    nb_epochs : int, number of training iterations
+    nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.
+
+    Returns
+    -------
+    score : array containing different precision values of the model
+
+    '''
+    TF_FORCE_GPU_ALLOW_GROWTH=True
+
+    model = Sequential()
+
+    model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape=(512,512,1)))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+    model.add(Convolution2D(32, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))       
+    model.add(BatchNormalization())
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
+    model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+    model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
+    model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+    model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
+    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+    # model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
+    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+    model.add(MaxPool2D(pool_size=(2, 2)))
+
+    model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+    model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
+    model.add(LeakyReLU(alpha = 0.1))
+    model.add(BatchNormalization())
+
+
+    model.add(Flatten())
+    model.add(Dense(512,activation='relu'))
+    model.add(Dropout(0.1))
+    model.add(Dense(26))
+    model.summary()
+
+    model.compile(optimizer='Adam',
+                  loss='mse',
+                  metrics=['mae'])
+
+    print('model created')  
+
+    history = model.fit(X_train, y_train, epochs = nb_epochs, batch_size = nb_batch_size)
+            
+    # Max batch size= available GPU memory bytes / 4 / (size of tensors + trainable parameters)
+    # here for 1000x1000 images : 256 000 000 000 / 4 / (1000*1000 + 256 822 328) = 248, we round it up to 256 for it be a power of 2
+    # cant handle that much, 100 works
+
+    training_loss = history.history['loss']
+    training_mae = history.history['mae']
+    
+    score = model.evaluate(X_test, y_test, verbose=0)
+
+    print('Test loss:', score[0])
+    print('Test accuracy:', score[1])
+
+    model.save(model_folder)
+    
+    return score
 
 def merge_projects():
     """
@@ -875,6 +1138,27 @@ def make_main_window(size, graph_canvas_width):
                         sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
                         sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]]
     
+    CNN_frame = [[sg.Text('Data augmentation : ', size=(20, 1)),
+                  sg.FolderBrowse("Images folder",size=(12,1)), 
+                  sg.Button("Augment by 1 times", size=(20,1), key='-DATA-AUG-'),
+                  sg.Spin([s for s in range(1,366)],initial_value=1, size=3, enable_events=True, key = "-DATA-NUM-")
+                  ],
+                 [sg.Text('Create a new CNN', size=(20, 1)),
+                  sg.FolderBrowse("Images folder",size=(12,1), key='-IMG-FOLDER-'), 
+                  sg.Button("Create", size=(12,1), key='-CNN-CREATE-')],
+                 [sg.Text('Continue with a pre-trained CNN', size=(20, 1)),
+                  sg.FolderBrowse("Images folder",size=(12,1),key='-IMG-FOLDER-'), 
+                  sg.FolderBrowse("Model file",size=(12,1)), 
+                  sg.Button("Continue", size=(20,1), key='-CNN-CONTINUE-')]]
+
+    epochs_frame = [[sg.Text('Number of epochs : ', size=(20, 1)),
+                     sg.Spin([s for s in range(1,1000000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
+                    [sg.Text('Epochs left : X', size=(20, 1)),
+                    sg.Text('Current precision : Y ', size=(20, 1))],
+                    [sg.Text('Currently running :', size=(15, 1)), 
+                     sg.Text('No', text_color=('red'), size= (4,1))],
+                    ]
+    
     image_column = [[sg.Text("Image:", size=(10, 1)), 
                      sg.Text("", key="-CURRENT-IMAGE-", size=(35, 1)),
                      sg.Button("Select image", key="-SELECT-IMAGE-")],
@@ -914,11 +1198,14 @@ def make_main_window(size, graph_canvas_width):
     
     communication_window = [[sg.Text("", key="-PRINT-", size=(100, 10))]]
     
-    layout = [[sg.Frame("Select project: ", layout = selection_frame)],
-              [sg.Frame("Annotate images: ", layout = annotation_frame)],
+    layout = [[sg.Frame("Select project: ", layout = selection_frame),
+               sg.Frame("Neural network", layout = CNN_frame)],
+              [sg.Frame("Annotate images: ", layout = annotation_frame),
+               sg.Frame("Epochs", layout = epochs_frame, vertical_alignment = 'top')],
               [sg.Button("Save changes to the project", key="-SAVE-")],
               [sg.Frame("Messages: ", layout = communication_window)]
               ]
+    
     
     # --------------------------------- Create Window ---------------------------------
     
