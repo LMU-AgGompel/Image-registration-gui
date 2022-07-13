@@ -1,2 +1,3 @@
+CNN
 image_annotation_gui
 registration_module

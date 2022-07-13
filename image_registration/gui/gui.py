@@ -9,7 +9,7 @@ import PySimpleGUI as sg
 import pandas as pd
 import numpy as np
 import ast
-
+import image_registration
 from ._gui_helpers import *
 
 def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_width = 700):
@@ -112,8 +112,13 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             create_registration_window(shared,df_landmarks,df_model,df_files)
         
         if event == '-CNN-CREATE-':
-            X_train, X_test, y_train, y_test = initialize_CNN(shared,values['-IMG-FOLDER-'],df_landmarks,df_files,df_model)
-            print(create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], 2, nb_batch_size= 4))
+            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER-'],df_landmarks,df_files,df_model,shared['curr_image'].size)
+            print(shared['curr_image'].size)
+            print(image_registration.create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], 2, shared['curr_image'].size, nb_batch_size= 4))
+            
+        if event == '-CNN-CONTINUE-' :
+            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER2-'],df_landmarks,df_files,df_model)
+            print(image_registration.continue_CNN(X_train,y_train,X_test,y_test,values['-MODEL-FOLDER-'], 2, nb_batch_size= 4))
             
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):

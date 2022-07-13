@@ -15,7 +15,7 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     license="MIT",
-    packages=["image_annotation_gui", "registration_module"],
+    packages=["image_annotation_gui", "registration_module","CNN"],
     include_package_data=True,
     python_requires='>3.7.1',
     install_requires=["numpy>=1.20.3", "pandas==1.3.3", "Pillow==9.0.1", "PySimpleGUI==4.57.0"],

@@ -197,6 +197,8 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_wi
     
     # updated current image, raw_image and current file:
     shared['curr_image'] = open_image(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
+    print(df_files.loc[shared['im_index'],"full path"])
+    plt.imshow(shared['curr_image'])
     shared['raw_image'] = shared['curr_image']
     shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]
     shared['pt_size'] = shared['curr_image'].width / 80
@@ -683,207 +685,204 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
     
     return
 
-from skimage import color
-from sklearn.model_selection import train_test_split
-import natsort
-from keras.models import Sequential
-from keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers import Convolution2D
+# from skimage import color
+# from sklearn.model_selection import train_test_split
+# import natsort
+# from keras.models import Sequential
+# from keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D
+# from keras.layers.advanced_activations import LeakyReLU
+# from keras.layers import Convolution2D
+# from keras.models import load_model
+# from keras.callbacks import ModelCheckpoint
 
-def initialize_CNN(shared, path, df_landmarks, df_files, df_model, test_ratio=0.3):
-    '''
-    Function to initalize the data for the neural network
+# def initialize_CNN(shared, path, df_landmarks, df_files, df_model, test_ratio=0.3):
+#     '''
+#     Function to initalize the data for the neural network
 
-    Parameters
-    ----------
-    shared : TYPE
-        DESCRIPTION.
-    df_landmarks : TYPE
-        DESCRIPTION.
-    df_files : TYPE
-        DESCRIPTION.
-    test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
+#     Parameters
+#     ----------
+#     shared : TYPE
+#         DESCRIPTION.
+#     df_landmarks : TYPE
+#         DESCRIPTION.
+#     df_files : TYPE
+#         DESCRIPTION.
+#     test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
 
-    Returns
-    -------
-    X_train : X coordinates array of training data
-    X_test : X coordinates array of testing data
-    y_train : y coordinates array of training data
-    y_test : y coordinates array of testing data
+#     Returns
+#     -------
+#     X_train : X coordinates array of training data
+#     X_test : X coordinates array of testing data
+#     y_train : y coordinates array of training data
+#     y_test : y coordinates array of testing data
 
-    '''
-    # Importing files
-    print(df_landmarks)
-    training = df_landmarks
-    training = training.dropna()
-    training = training.reset_index()
-    print('cvs file loaded')
-    print(path)
-    folder_dir = path
+#     '''
+#     # Importing files
+#     print(df_landmarks)
+#     training = df_landmarks
+#     training = training.dropna()
+#     training = training.reset_index()
+#     print('cvs file loaded')
+#     print(path)
+#     folder_dir = path
     
     
-    landmarks_list = df_model["name"].values
+#     landmarks_list = df_model["name"].values
 
     
-    # get images and their landmarks
-    k=0
-    images_array = []
+#     # get images and their landmarks
+#     images_array = []
     
-    os.chdir(folder_dir)
+#     os.chdir(folder_dir)
     
-    for i in range(len(training["file name"])):
-    #importing the images and recoloring them as grayscale
-        images_array.append(color.rgb2gray(cv2.imread(training["file name"][i])))
-        # images_array[1].append(training["file name"][i])
-        
-        k+=1
-        
-    print('images loaded')
-        
-    # plot the images and landmarks for testing
-    # fig, ax = plt.subplots(1,2, figsize=(32,16))
-    # for i in range(2):
-    #     ax[i].axis('off')
-    #     ax[i].scatter(np.array(training.loc[i][0::2])/np.array([(7.5)]),np.array(training.loc[i][1::2])/np.array([(6.31640625)]),marker='+', c = 'red',s = 1000)
-    #     ax[i].imshow(images[i])
-    # plt.show()
-    i = 0
+#     #importing the images and recoloring them as grayscale
+#     for i in range(len(training["file name"])):
+#         images_array.append(color.rgb2gray(cv2.imread(training["file name"][i])))
+
+
+#     # Removing images with empty values
+#     training = training.drop(["file name"], axis=1)
+#     training = training.drop(['index'],axis = 1)
+
+
+#     X = np.asarray(images_array).reshape(len(training.index),647,768,1)
     
-    training = training.drop(["file name"], axis=1)
-    # for lm in landmarks_list :
-    #     training
-        
-        
-    #     i+=1
-        
-    #Resizing the landmarks to fit the images
-    # for i in range(len(training.index)):
-    #     for j in range(0,len(training.columns)-1,2):
-    #         training.iloc[i][j] = training.iloc[i][j]/np.array([7.5])
-    #         training.iloc[i][j+1] = training.iloc[i][j+1]/np.array( [6.31640625])
+#     print(training)
+#     for i in range(len(training.index)):
+#         for j in range(0,len(training.columns)-1,2):
+#             training.iloc[i][j] = ast.literal_eval(training.iloc[i][j])
+#             training.iloc[i][j+1] = ast.literal_eval(training.iloc[i][j+1])
+    
+#     b=[]
+#     c=[]
+#     for k in range(len(training.index)):
+#         for l in range(0,len(training.columns)-1,2):
+#             b += training.iloc[k][l]
+#         c.append(b)
+#         b=[]
+
+#     y2 = np.array(c)
+#     X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
+
+
+#     return X_train, X_test, y_train, y_test
+
+# def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape, nb_batch_size= 16):
+#     '''
+#     Function that will create a neural network from training data
+
+#     Parameters
+#     ----------
+#     X_train : Array of iamge training data
+#     X_test : Array of image testing data
+#     y_train : Coordinates array of training data
+#     y_test : Coordinates array of testing data
+#     model_folder : str, folder where to save the model
+#     nb_epochs : int, number of training iterations
+#     nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.
+
+#     Returns
+#     -------
+#     score : array containing different precision values of the model
+
+#     '''
+#     TF_FORCE_GPU_ALLOW_GROWTH=True
+
+#     model = Sequential()
+#     print(img_shape)
+#     model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape = img_shape[::-1] + (1,) ))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+#     model.add(Convolution2D(32, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))       
+#     model.add(BatchNormalization())
+#     model.add(MaxPool2D(pool_size=(2, 2)))
+
+#     model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+#     model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+#     model.add(MaxPool2D(pool_size=(2, 2)))
+
+#     model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+#     model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+#     model.add(MaxPool2D(pool_size=(2, 2)))
+
+#     model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+#     # model.add(BatchNormalization())
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+#     model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+#     model.add(MaxPool2D(pool_size=(2, 2)))
+
+#     model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+#     model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+#     model.add(MaxPool2D(pool_size=(2, 2)))
+
+#     model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+#     model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
+#     model.add(LeakyReLU(alpha = 0.1))
+#     model.add(BatchNormalization())
+
+
+#     model.add(Flatten())
+#     model.add(Dense(512,activation='relu'))
+#     model.add(Dropout(0.1))
+#     model.add(Dense(12))
+#     model.summary()
+
+#     model.compile(optimizer='Adam',
+#                   loss='mse',
+#                   metrics=['mae'])
+
+#     history = model.fit(X_train, y_train, epochs = nb_epochs, batch_size = nb_batch_size)
             
-    print('landmarks resized')
-            
-    X = np.asarray(images_array).reshape(len(training.index),647,768,1)
+#     # Max batch size= available GPU memory bytes / 4 / (size of tensors + trainable parameters)
+#     # here for 1000x1000 images : 256 000 000 000 / 4 / (1000*1000 + 256 822 328) = 248, we round it up to 256 for it be a power of 2
+#     # cant handle that much, 100 works
 
-
-    y2 = training.to_numpy()
-
-    print('arrays created')
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
-
-    print('training arrays separated')
-    return X_train, X_test, y_train, y_test
-
-def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, nb_batch_size= 16):
-    '''
-    Function that will create a neural network from training data
-
-    Parameters
-    ----------
-    X_train : X coordinates array of training data
-    X_test : X coordinates array of testing data
-    y_train : y coordinates array of training data
-    y_test : y coordinates array of testing data
-    model_folder : str, folder where to save the model
-    nb_epochs : int, number of training iterations
-    nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.
-
-    Returns
-    -------
-    score : array containing different precision values of the model
-
-    '''
-    TF_FORCE_GPU_ALLOW_GROWTH=True
-
-    model = Sequential()
-
-    model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape=(512,512,1)))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-    model.add(Convolution2D(32, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))       
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2)))
-
-    model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-    model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2)))
-
-    model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-    model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2)))
-
-    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
-    # model.add(BatchNormalization())
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2)))
-
-    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-    model.add(MaxPool2D(pool_size=(2, 2)))
-
-    model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-    model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
-    model.add(LeakyReLU(alpha = 0.1))
-    model.add(BatchNormalization())
-
-
-    model.add(Flatten())
-    model.add(Dense(512,activation='relu'))
-    model.add(Dropout(0.1))
-    model.add(Dense(26))
-    model.summary()
-
-    model.compile(optimizer='Adam',
-                  loss='mse',
-                  metrics=['mae'])
-
-    print('model created')  
-
-    history = model.fit(X_train, y_train, epochs = nb_epochs, batch_size = nb_batch_size)
-            
-    # Max batch size= available GPU memory bytes / 4 / (size of tensors + trainable parameters)
-    # here for 1000x1000 images : 256 000 000 000 / 4 / (1000*1000 + 256 822 328) = 248, we round it up to 256 for it be a power of 2
-    # cant handle that much, 100 works
-
-    training_loss = history.history['loss']
-    training_mae = history.history['mae']
+#     training_loss = history.history['loss']
+#     training_mae = history.history['mae']
     
-    score = model.evaluate(X_test, y_test, verbose=0)
+#     score = model.evaluate(X_test, y_test, verbose=0)
 
-    print('Test loss:', score[0])
-    print('Test accuracy:', score[1])
+#     # print('Test loss:', score[0])
+#     # print('Test accuracy:', score[1])
+#     model.summary()
+#     model.save(model_folder+ '/model.h5')
+#     # model2 = load_model(model_folder + '/model.h5')
+#     # model2.summary()
+#     return score
 
-    model.save(model_folder)
-    
-    return score
+# def continue_CNN(X_train,y_train,X_test,y_test,model_path, nb_epochs, nb_batch_size= 16):
+
+#     continue_model = load_model(model_path)
+#     continue_model.summary()
+#     checkpoint = ModelCheckpoint(model_path, monitor='loss', verbose=1, save_best_only=True, mode='min')
+#     callbacks_list = [checkpoint]
+#     continue_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+#     score = continue_model.evaluate(X_test, y_test, verbose=0)
+#     return score
 
 def merge_projects():
     """
@@ -1144,11 +1143,14 @@ def make_main_window(size, graph_canvas_width):
                   sg.Spin([s for s in range(1,366)],initial_value=1, size=3, enable_events=True, key = "-DATA-NUM-")
                   ],
                  [sg.Text('Create a new CNN', size=(20, 1)),
+                  sg.Input(size=(2,1), enable_events=True, key='-IMG-FOLDER-'),
                   sg.FolderBrowse("Images folder",size=(12,1), key='-IMG-FOLDER-'), 
                   sg.Button("Create", size=(12,1), key='-CNN-CREATE-')],
                  [sg.Text('Continue with a pre-trained CNN', size=(20, 1)),
-                  sg.FolderBrowse("Images folder",size=(12,1),key='-IMG-FOLDER-'), 
-                  sg.FolderBrowse("Model file",size=(12,1)), 
+                  sg.Input(size=(2,1), enable_events=True, key='-IMG-FOLDER2-'),
+                  sg.FolderBrowse("Images folder",size=(12,1)),
+                  sg.Input(size=(2,1), enable_events=True, key='-MODEL-FOLDER-'),
+                  sg.FileBrowse("Model file",size=(12,1)), 
                   sg.Button("Continue", size=(20,1), key='-CNN-CONTINUE-')]]
 
     epochs_frame = [[sg.Text('Number of epochs : ', size=(20, 1)),
