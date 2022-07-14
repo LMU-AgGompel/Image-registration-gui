@@ -40,12 +40,9 @@ def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, te
 
     '''
     # Importing files
-    print(df_landmarks)
     training = df_landmarks
     training = training.dropna()
     training = training.reset_index()
-    print('cvs file loaded')
-    print(path)
     folder_dir = path
     
     
@@ -68,8 +65,7 @@ def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, te
 
 
     X = np.asarray(images_array).reshape(len(training.index),img_shape[1],img_shape[0],1)
-    
-    print(training)
+
     for i in range(len(training.index)):
         for j in range(0,len(training.columns)-1,2):
             training.iloc[i][j] = ast.literal_eval(training.iloc[i][j])
@@ -111,7 +107,6 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
     TF_FORCE_GPU_ALLOW_GROWTH=True
 
     model = Sequential()
-    print(img_shape)
     model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape = img_shape[::-1] + (1,) ))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())

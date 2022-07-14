@@ -11,6 +11,8 @@ import numpy as np
 import ast
 import image_registration
 from ._gui_helpers import *
+import threading
+import time
 
 def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_width = 700):
     """
@@ -70,13 +72,14 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-LOAD-PROJECT-':
             
             shared['proj_folder'] = values['-PROJECT-FOLDER-']
-            
+
             # try to open all the project files and initialize variables:
             try:
             
                 df_files       = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name) )
                 df_landmarks   = pd.read_csv( os.path.join(shared['proj_folder'], df_landmarks_name) )
                 df_model       = pd.read_csv( os.path.join(shared['proj_folder'], df_model_name) )
+                df_lines       = pd.read_csv( os.path.join(shared['proj_folder'], df_lines_name) )
                 
                 shared['ref_image'] = open_image(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
                 shared['im_index'] = 0
@@ -109,16 +112,22 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             merge_projects()
             
         if event == '-REGISTRATION-':
-            create_registration_window(shared,df_landmarks,df_model,df_files)
+            create_registration_window(shared,df_landmarks,df_model,df_files, df_lines)
+        
+        if event == '-DATA-AUG-':
+            data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, values["-DATA-NUM-"])
         
         if event == '-CNN-CREATE-':
+            window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
+            window.Refresh()
             X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER-'],df_landmarks,df_files,df_model,shared['curr_image'].size)
-            print(shared['curr_image'].size)
-            print(image_registration.create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], 2, shared['curr_image'].size, nb_batch_size= 4))
+            image_registration.create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], values["-EPOCHS-"], shared['curr_image'].size, nb_batch_size= 25)
+            window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
+            window.Refresh()
             
         if event == '-CNN-CONTINUE-' :
-            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER2-'],df_landmarks,df_files,df_model)
-            print(image_registration.continue_CNN(X_train,y_train,X_test,y_test,values['-MODEL-FOLDER-'], 2, nb_batch_size= 4))
+            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER2-'],df_landmarks,df_files,df_model, shared['curr_image'].size)
+            image_registration.continue_CNN(X_train,y_train,X_test,y_test,values['-MODEL-FOLDER-'], values["-EPOCHS-"], nb_batch_size= 4)
             
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):

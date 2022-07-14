@@ -16,6 +16,7 @@ from skimage.filters import gaussian
 from skimage.segmentation import active_contour
 from skimage.filters import difference_of_gaussians
 import matplotlib.pyplot as plt
+import random as rd
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -26,6 +27,8 @@ image_quality_choiches = ["undefined", "good", "fair", "poor", "bad"]
 df_files_name = "images_dataframe.csv"
 
 df_landmarks_name = "landmarks_dataframe.csv"
+
+df_lines_name = "lines_dataframe.csv"
 
 df_model_name = "model_dataframe.csv"
 
@@ -197,8 +200,6 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_wi
     
     # updated current image, raw_image and current file:
     shared['curr_image'] = open_image(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
-    print(df_files.loc[shared['im_index'],"full path"])
-    plt.imshow(shared['curr_image'])
     shared['raw_image'] = shared['curr_image']
     shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]
     shared['pt_size'] = shared['curr_image'].width / 80
@@ -500,7 +501,7 @@ def create_new_project():
     return
 
 
-def create_registration_window(shared,df_landmarks,df_model,df_files):
+def create_registration_window(shared,df_landmarks,df_model,df_files, df_lines):
     """
     Function used to register selected images.
     It opens a new graphical window and collects from the user the info required
@@ -513,7 +514,7 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
     Finally, it creates all the new images in the target folder.
           
     """
-    df_lines = pd.read_csv('/home/titouan/Image-registration-gui/test_data/example_project/lines_dataframe.csv')
+    
     # GUI - Define a new window to collect input:
     layout = [[sg.Text('Where to save the registered images ', size=(35, 1)), 
                sg.Input(size=(25,8), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
@@ -567,8 +568,6 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                 LMref=[]
                 lm1 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk1"][i], "target"].values[0])
                 lm2 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk2"][i], "target"].values[0])
-                # alpha = (df_lines.loc[df_lines["Lmk1"][i]==df_model["name"], "alpha"])
-                # alpha = alpha.iloc[0]
 
                 snk = snake_contour(img,lm1[1],lm1[0],lm2[1],lm2[0],alpha,smoothing,w_line)
                 if len(snk)>=10:
@@ -580,7 +579,6 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                 
                 N.append(len(snk))
                 c_dst.extend(LMref[0])
-            # c_dst = np.reshape(c_dst,(len(c_dst),2))
             shape = shared['ref_image'].size
             c_dst = c_dst/np.asarray(shape)
             
@@ -618,8 +616,6 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                     
                 # Get snake image landmarks
 
-                # for k in range(len(df_files["file name"])):
-                # for k in range(1):  
                 LM = []
                 for i in range(len(df_lines["Lmk1"])-6):
                     LM = []
@@ -634,7 +630,6 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                     
                     LM.extend(snk)
                     c_src.extend(LM[0][1:-1])
-                # c_src = np.reshape(c_src,(len(c_src),2))
                 shape = img.size
                 c_src = c_src/np.asarray([img.shape[1],img.shape[0]])
                 
@@ -651,17 +646,6 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
                 except : 
                     dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the warping of' + str(images))
                     continue
-                # and save the image
-                # try :
-                # fig, ax = plt.subplots( nrows=1, ncols=3 )
-                # ref = shared['ref_image']
-                # ax[0].imshow(ref)
-                # ax[0].scatter(c_dst[:, 0]*ref.size[0], c_dst[:, 1]*ref.size[1], marker='+', color='red')
-                # ax[1].imshow(img)
-                # ax[1].scatter(c_src[:, 0]*img.shape[1], c_src[:, 1]*img.shape[0], marker='+', color='red')
-                # ax[2].imshow(warped)
-                # ax[2].scatter(c_dst[:, 0]*warped.shape[1], c_dst[:, 1]*warped.shape[0], marker='+', color='red')
-                # plt.savefig('/home/titouan/Image-registration-gui_snakes/test_data/example_registered/'+str(images)+str('.jpg'),dpi=300)
                 
                 k+=1
                 
@@ -685,204 +669,77 @@ def create_registration_window(shared,df_landmarks,df_model,df_files):
     
     return
 
-# from skimage import color
-# from sklearn.model_selection import train_test_split
-# import natsort
-# from keras.models import Sequential
-# from keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D
-# from keras.layers.advanced_activations import LeakyReLU
-# from keras.layers import Convolution2D
-# from keras.models import load_model
-# from keras.callbacks import ModelCheckpoint
+def rotate(coord, angle, img_size):
+    """
+    Rotate a list of coordinates counterclockwise by a given angle in radians around the image center.
 
-# def initialize_CNN(shared, path, df_landmarks, df_files, df_model, test_ratio=0.3):
-#     '''
-#     Function to initalize the data for the neural network
+    Parameters :
 
-#     Parameters
-#     ----------
-#     shared : TYPE
-#         DESCRIPTION.
-#     df_landmarks : TYPE
-#         DESCRIPTION.
-#     df_files : TYPE
-#         DESCRIPTION.
-#     test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
+        list = list of landmarks coordinates in an array
+        angle = angle of rotation (clockwise)
+        img_size = tuple of the image shape
 
-#     Returns
-#     -------
-#     X_train : X coordinates array of training data
-#     X_test : X coordinates array of testing data
-#     y_train : y coordinates array of training data
-#     y_test : y coordinates array of testing data
+    Returns :
 
-#     '''
-#     # Importing files
-#     print(df_landmarks)
-#     training = df_landmarks
-#     training = training.dropna()
-#     training = training.reset_index()
-#     print('cvs file loaded')
-#     print(path)
-#     folder_dir = path
+        outlist = list of all the modified landmarks coordinates in an array
+    """
+    outlist=[]
+    ox, oy = img_size[1]/2, img_size[0]/2
+    for i in range(len(coord)):
+        px, py = coord[i]
+        qx = round(ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy),2)
+        qy = round(oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy),2)
+        outlist.append([qx,qy])
+    return outlist
+
+def data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, augmented_by_x):
     
+    # Getting the global project folder
+    os.chdir(shared['proj_folder'])
+    global_folder = os.path.normpath(os.getcwd() + os.sep + os.pardir)
+    os.chdir(global_folder)
     
-#     landmarks_list = df_model["name"].values
-
-    
-#     # get images and their landmarks
-#     images_array = []
-    
-#     os.chdir(folder_dir)
-    
-#     #importing the images and recoloring them as grayscale
-#     for i in range(len(training["file name"])):
-#         images_array.append(color.rgb2gray(cv2.imread(training["file name"][i])))
-
-
-#     # Removing images with empty values
-#     training = training.drop(["file name"], axis=1)
-#     training = training.drop(['index'],axis = 1)
+    # Creating the folder for the images + csv file
+    try : 
+        os.mkdir('augmented_data') 
+    except : 
+        print('folder already exist')
+        print(global_folder)
+        print(global_folder + '/augmented_data/*')
+        files = glob.glob(global_folder + '/augmented_data/*')
+        print(files)
+        for f in files:
+            os.remove(f)
 
 
-#     X = np.asarray(images_array).reshape(len(training.index),647,768,1)
-    
-#     print(training)
-#     for i in range(len(training.index)):
-#         for j in range(0,len(training.columns)-1,2):
-#             training.iloc[i][j] = ast.literal_eval(training.iloc[i][j])
-#             training.iloc[i][j+1] = ast.literal_eval(training.iloc[i][j+1])
-    
-#     b=[]
-#     c=[]
-#     for k in range(len(training.index)):
-#         for l in range(0,len(training.columns)-1,2):
-#             b += training.iloc[k][l]
-#         c.append(b)
-#         b=[]
+    # Getting into the images folder
 
-#     y2 = np.array(c)
-#     X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
+    os.chdir(os.path.normpath(df_files["full path"][0] + os.sep + os.pardir))
 
 
-#     return X_train, X_test, y_train, y_test
+    # shutil.copy(shared['proj_folder'] + '/' + df_landmarks_name,global_folder + '/augmented_data/')
 
-# def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape, nb_batch_size= 16):
-#     '''
-#     Function that will create a neural network from training data
+    df_landmarks_np = pd.read_csv(shared['proj_folder'] + '/' + df_landmarks_name).to_numpy()
 
-#     Parameters
-#     ----------
-#     X_train : Array of iamge training data
-#     X_test : Array of image testing data
-#     y_train : Coordinates array of training data
-#     y_test : Coordinates array of testing data
-#     model_folder : str, folder where to save the model
-#     nb_epochs : int, number of training iterations
-#     nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.
+    for i in range(len(df_landmarks_np)):
+        for j in range(len(df_landmarks_np[i])-1):
+            df_landmarks_np[i][j+1] = ast.literal_eval((df_landmarks_np[i][j+1]))
+        
+    output_landmarks= []
+    for i in range(augmented_by_x * len(df_landmarks)):
+        angle = rd.randint(0,359)
+        img = Image.open(df_landmarks_np[i%len(df_landmarks)][0])
+        rot = img.rotate(angle)
+        rot.save(global_folder + '/augmented_data/' + str(i)+df_landmarks_np[i%len(df_landmarks)][0])
+        print(df_landmarks_np)
+        df_landmarks_np[0][1]
+        clist = rotate(df_landmarks_np[i%len(df_landmarks)][1:], math.radians(-angle), (img.size[0],img.size[1]))
+        clist.insert(0,(str(i) + df_landmarks_np[i%len(df_landmarks)][0]))
+        output_landmarks.append(clist)
 
-#     Returns
-#     -------
-#     score : array containing different precision values of the model
+    rot_lm_df = pd.DataFrame(output_landmarks, columns = df_landmarks.columns.values)
+    rot_lm_df.to_csv(global_folder + '/augmented_data/' + 'landmarks.csv', index=False)
 
-#     '''
-#     TF_FORCE_GPU_ALLOW_GROWTH=True
-
-#     model = Sequential()
-#     print(img_shape)
-#     model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape = img_shape[::-1] + (1,) ))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-#     model.add(Convolution2D(32, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))       
-#     model.add(BatchNormalization())
-#     model.add(MaxPool2D(pool_size=(2, 2)))
-
-#     model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-#     model.add(Convolution2D(64, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-#     model.add(MaxPool2D(pool_size=(2, 2)))
-
-#     model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-#     model.add(Convolution2D(96, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-#     model.add(MaxPool2D(pool_size=(2, 2)))
-
-#     model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
-#     # model.add(BatchNormalization())
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-#     model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-#     model.add(MaxPool2D(pool_size=(2, 2)))
-
-#     model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-#     model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-#     model.add(MaxPool2D(pool_size=(2, 2)))
-
-#     model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-#     model.add(Convolution2D(512, (3,3), padding='same', use_bias=False))
-#     model.add(LeakyReLU(alpha = 0.1))
-#     model.add(BatchNormalization())
-
-
-#     model.add(Flatten())
-#     model.add(Dense(512,activation='relu'))
-#     model.add(Dropout(0.1))
-#     model.add(Dense(12))
-#     model.summary()
-
-#     model.compile(optimizer='Adam',
-#                   loss='mse',
-#                   metrics=['mae'])
-
-#     history = model.fit(X_train, y_train, epochs = nb_epochs, batch_size = nb_batch_size)
-            
-#     # Max batch size= available GPU memory bytes / 4 / (size of tensors + trainable parameters)
-#     # here for 1000x1000 images : 256 000 000 000 / 4 / (1000*1000 + 256 822 328) = 248, we round it up to 256 for it be a power of 2
-#     # cant handle that much, 100 works
-
-#     training_loss = history.history['loss']
-#     training_mae = history.history['mae']
-    
-#     score = model.evaluate(X_test, y_test, verbose=0)
-
-#     # print('Test loss:', score[0])
-#     # print('Test accuracy:', score[1])
-#     model.summary()
-#     model.save(model_folder+ '/model.h5')
-#     # model2 = load_model(model_folder + '/model.h5')
-#     # model2.summary()
-#     return score
-
-# def continue_CNN(X_train,y_train,X_test,y_test,model_path, nb_epochs, nb_batch_size= 16):
-
-#     continue_model = load_model(model_path)
-#     continue_model.summary()
-#     checkpoint = ModelCheckpoint(model_path, monitor='loss', verbose=1, save_best_only=True, mode='min')
-#     callbacks_list = [checkpoint]
-#     continue_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
-#     score = continue_model.evaluate(X_test, y_test, verbose=0)
-#     return score
 
 def merge_projects():
     """
@@ -1138,7 +995,6 @@ def make_main_window(size, graph_canvas_width):
                         sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]]
     
     CNN_frame = [[sg.Text('Data augmentation : ', size=(20, 1)),
-                  sg.FolderBrowse("Images folder",size=(12,1)), 
                   sg.Button("Augment by 1 times", size=(20,1), key='-DATA-AUG-'),
                   sg.Spin([s for s in range(1,366)],initial_value=1, size=3, enable_events=True, key = "-DATA-NUM-")
                   ],
@@ -1158,7 +1014,7 @@ def make_main_window(size, graph_canvas_width):
                     [sg.Text('Epochs left : X', size=(20, 1)),
                     sg.Text('Current precision : Y ', size=(20, 1))],
                     [sg.Text('Currently running :', size=(15, 1)), 
-                     sg.Text('No', text_color=('red'), size= (4,1))],
+                     sg.Text('No', text_color=('red'), size= (4,1), key = "-MODEL-RUN-STATE-")],
                     ]
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 
