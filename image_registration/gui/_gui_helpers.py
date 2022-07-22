@@ -17,6 +17,7 @@ from skimage.segmentation import active_contour
 from skimage.filters import difference_of_gaussians
 import matplotlib.pyplot as plt
 import random as rd
+import image_registration
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -669,6 +670,62 @@ def create_registration_window(shared,df_landmarks,df_model,df_files, df_lines):
     
     return
 
+def CNN_create(window,X_train,y_train,X_test,y_test,shared,values):
+    '''
+    Create a CNN model using the create_CNN function
+
+    Parameters
+    ----------
+    window : TYPE
+        DESCRIPTION.
+    X_train : Array of iamge training data
+    X_test : Array of image testing data
+    y_train : Coordinates array of training data
+    y_test : Coordinates array of testing data
+    shared : TYPE
+        DESCRIPTION.
+    values : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    window['-MODEL-RUN-STATE-'].update('Initializing...', text_color=('yellow'))
+    window.Refresh()
+    image_registration.create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], values["-EPOCHS-"], shared['curr_image'].size, window, values)
+    window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
+    window.Refresh()
+    
+def CNN_continue(window,X_train,y_train,X_test,y_test,shared,values):
+    '''
+    Continue the training of a model using the continue_CNN function
+
+    Parameters
+    ----------
+    window : TYPE
+        DESCRIPTION.
+    X_train : Array of iamge training data
+    X_test : Array of image testing data
+    y_train : Coordinates array of training data
+    y_test : Coordinates array of testing data
+    shared : TYPE
+        DESCRIPTION.
+    values : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    window['-MODEL-RUN-STATE-'].update('Initializing...', text_color=('yellow'))
+    window.Refresh()
+    image_registration.continue_CNN(X_train,y_train,X_test,y_test,values["-MODEL-FOLDER-"], values["-EPOCHS-"], window, values)
+    window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
+    window.Refresh()
+    
 def rotate(coord, angle, img_size):
     """
     Rotate a list of coordinates counterclockwise by a given angle in radians around the image center.
@@ -731,8 +788,6 @@ def data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, augment
         img = Image.open(df_landmarks_np[i%len(df_landmarks)][0])
         rot = img.rotate(angle)
         rot.save(global_folder + '/augmented_data/' + str(i)+df_landmarks_np[i%len(df_landmarks)][0])
-        print(df_landmarks_np)
-        df_landmarks_np[0][1]
         clist = rotate(df_landmarks_np[i%len(df_landmarks)][1:], math.radians(-angle), (img.size[0],img.size[1]))
         clist.insert(0,(str(i) + df_landmarks_np[i%len(df_landmarks)][0]))
         output_landmarks.append(clist)
@@ -1011,11 +1066,20 @@ def make_main_window(size, graph_canvas_width):
 
     epochs_frame = [[sg.Text('Number of epochs : ', size=(20, 1)),
                      sg.Spin([s for s in range(1,1000000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
-                    [sg.Text('Epochs left : X', size=(20, 1)),
-                    sg.Text('Current precision : Y ', size=(20, 1))],
+                    [sg.Checkbox('Infinte epochs', default=False, key = "-INF-EPOCHS-")],
+                    [sg.Text('Epochs left : X', size=(17, 1), key = '-EPOCHS-COUNT-'),
+                    sg.Text('Current precision : Y ', size=(28, 1), key = '-CURRENT-MAE-')],
                     [sg.Text('Currently running :', size=(15, 1)), 
-                     sg.Text('No', text_color=('red'), size= (4,1), key = "-MODEL-RUN-STATE-")],
+                     sg.Text('No', text_color=('red'), size= (30,1), key = "-MODEL-RUN-STATE-")],
+                    [sg.Button('Stop training',size = (15,1), key = '-STOP-TRAINING-')],
+                    [sg.Text('')],
+                    [sg.Input(size=(2,1), enable_events=True, key='-IMG-FOLDER3-'),
+                     sg.FolderBrowse("Images folder",size=(12,1)),
+                     sg.Input(size=(2,1), enable_events=True, key='-MODEL-FOLDER2-'),
+                      sg.FileBrowse("Model file",size=(12,1))],
+                    [sg.Button('Landmarks detection', key ='LM-DETECT')]
                     ]
+    
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 
                      sg.Text("", key="-CURRENT-IMAGE-", size=(35, 1)),
@@ -1059,7 +1123,7 @@ def make_main_window(size, graph_canvas_width):
     layout = [[sg.Frame("Select project: ", layout = selection_frame),
                sg.Frame("Neural network", layout = CNN_frame)],
               [sg.Frame("Annotate images: ", layout = annotation_frame),
-               sg.Frame("Epochs", layout = epochs_frame, vertical_alignment = 'top')],
+               sg.Frame("Model parameters", layout = epochs_frame, vertical_alignment = 'top')],
               [sg.Button("Save changes to the project", key="-SAVE-")],
               [sg.Frame("Messages: ", layout = communication_window)]
               ]

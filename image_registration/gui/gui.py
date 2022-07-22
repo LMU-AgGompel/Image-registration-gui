@@ -118,16 +118,17 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, values["-DATA-NUM-"])
         
         if event == '-CNN-CREATE-':
-            window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
-            window.Refresh()
-            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER-'],df_landmarks,df_files,df_model,shared['curr_image'].size)
-            image_registration.create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], values["-EPOCHS-"], shared['curr_image'].size, nb_batch_size= 25)
-            window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
-            window.Refresh()
+            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
+            threading.Thread(target=CNN_create, args=(window,X_train,y_train,X_test,y_test,shared, values), daemon=True).start()
             
         if event == '-CNN-CONTINUE-' :
-            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER2-'],df_landmarks,df_files,df_model, shared['curr_image'].size)
-            image_registration.continue_CNN(X_train,y_train,X_test,y_test,values['-MODEL-FOLDER-'], values["-EPOCHS-"], nb_batch_size= 4)
+
+            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER2-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
+
+            threading.Thread(target = CNN_continue, args = (window,X_train,y_train,X_test,y_test,shared, values), daemon=True).start()
+            
+        if event == 'LM-DETECT':
+            threading.Thread(target = image_registration.CNN.predict_lm, args = (df_files, df_model, values, window, shared), daemon=True).start()
             
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):
