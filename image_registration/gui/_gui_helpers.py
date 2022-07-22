@@ -15,7 +15,6 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
 from skimage.filters import difference_of_gaussians
-import matplotlib.pyplot as plt
 import random as rd
 import image_registration
 
@@ -761,10 +760,7 @@ def data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, augment
         os.mkdir('augmented_data') 
     except : 
         print('folder already exist')
-        print(global_folder)
-        print(global_folder + '/augmented_data/*')
         files = glob.glob(global_folder + '/augmented_data/*')
-        print(files)
         for f in files:
             os.remove(f)
 

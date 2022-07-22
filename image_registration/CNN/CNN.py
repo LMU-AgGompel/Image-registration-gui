@@ -18,7 +18,6 @@ import os,cv2,ast
 import numpy as np
 import itertools
 import csv
-import matplotlib.pyplot as plt
 import pandas as pd
 
 def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, test_ratio=0.3):
@@ -82,11 +81,8 @@ def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, te
         b=[]
 
     y2 = np.array(c)
-    print(y2)
     X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
 
-    print(y_train)
-    plt.imshow(X_train[0])
     return X_train, X_test, y_train, y_test
 
 def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape, window, values, nb_batch_size= 16):
@@ -199,10 +195,10 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
             
             checkpoint = ModelCheckpoint(model_folder+ '/model.h5', monitor='mae', verbose=1, save_best_only=True, mode='min')
             callbacks_list = [checkpoint]
-            model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+            model.fit(X_train, y_train, epochs=1, batch_size = nb_batch_size, callbacks=callbacks_list)
 
             
-            window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (+1)))
+            window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (i+1)))
             window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(model.history.history['mae']),2)))
             window.Refresh()
             
@@ -252,21 +248,21 @@ def continue_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, window, 
             callbacks_list = [checkpoint]
             continue_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
 
-            window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (i+1)))
+            window['-EPOCHS-COUNT-'].update('Epochs left : Inf')
             window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(continue_model.history.history['mae']),2)))
             window.Refresh()
              
 
     else : 
-        # for i in range(nb_epochs):
+        for i in range(nb_epochs):
             
-        checkpoint = ModelCheckpoint(model_folder, monitor='loss', verbose=1, save_best_only=True, mode='min')
-        callbacks_list = [checkpoint]
-        continue_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+            checkpoint = ModelCheckpoint(model_folder, monitor='loss', verbose=1, save_best_only=True, mode='min')
+            callbacks_list = [checkpoint]
+            continue_model.fit(X_train, y_train, epochs=1, batch_size = nb_batch_size, callbacks=callbacks_list)
         
-        window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (i+1)))
-        window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(continue_model.history.history['mae']),2)))
-        window.Refresh()
+            window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (i+1)))
+            window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(continue_model.history.history['mae']),2)))
+            window.Refresh()
             
     window['-MODEL-RUN-STATE-'].update('Saving model...', text_color=('yellow'))
     window.Refresh()
