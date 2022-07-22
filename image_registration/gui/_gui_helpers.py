@@ -32,6 +32,8 @@ df_lines_name = "lines_dataframe.csv"
 
 df_model_name = "model_dataframe.csv"
 
+df_channels_name = "extra_channels_dataframe.csv"
+
 ref_image_name = "reference_image.tif"
 
 
@@ -340,26 +342,7 @@ def update_progress_bar(df_files, window):
     window["-PRINT-"].update(str(n_annotated)+" annotated images out of "+str(n_not_annotated+n_annotated) )
     return   
 
-def rebin(img, binning):
-    img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    width = int(img.shape[1] / binning)
-    height = int(img.shape[0] / binning)
-    dim = (width, height)
-    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-    return resized
-
-
-def enhance_edges(img, binning, smoothing):
-    img = rebin(img, binning)
-    filtered_image = difference_of_gaussians(img, 2, 10)
-    filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
-    filtered_image = 1 -filtered_image
-    edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
-    edges = gaussian(edges, smoothing, preserve_range=False)
-    return edges
-
-#Issue with point spacing : if point spacing > lenght between the two points -> error
-def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = None, points_spacing = 30, binning=2 ):
+def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = None, points_spacing = 30, binning=1):
     distance = np.sqrt((p1_x-p2_x)**2+(p1_y-p2_y)**2)
     n_points = N or int(distance/points_spacing)
 
@@ -370,9 +353,27 @@ def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = Non
     img = enhance_edges(img, binning, smoothing)
     snake = active_contour(img,
                    init, boundary_condition='fixed', coordinates='rc', 
-                   alpha=0.1, beta=1, w_line=-5, w_edge=0, gamma= 0.1)
-    return snake*binning
+                   alpha=alpha, beta=1, w_line=w_line, w_edge=0, gamma= 0.1)
     
+    return snake*binning
+
+def rebin(img, binning):
+    #img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    width = int(img.shape[1] / binning)
+    height = int(img.shape[0] / binning)
+    dim = (width, height)
+    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    return resized
+
+def enhance_edges(img, binning, smoothing):
+    img = rebin(img, binning)
+    filtered_image = difference_of_gaussians(img, 2, 10)
+    filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
+    filtered_image = 1 -filtered_image
+    edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
+    edges = gaussian(edges, smoothing, preserve_range=False)
+    return edges
+
 
 def create_new_project():
     """
@@ -500,175 +501,263 @@ def create_new_project():
     
     return
 
-
-def create_registration_window(shared,df_landmarks,df_model,df_files, df_lines):
+def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
     """
-    Function used to register selected images.
-    It opens a new graphical window and collects from the user the info required
-    for the creation of the registered images: 
-        
-        - the images location
-        - a folder to save the registered images
-        - a slider to define the output images definition
-          
-    Finally, it creates all the new images in the target folder.
-          
-    """
+    Function used to generate to locate the image files of additional channels 
+    corresponding to each image of the reference channels in the project.
+    The function considers all the files included in the df_files dataframe and 
+    look in a list of folders for files with a matching name except for the 
+    channel label.
     
+    Parameters
+    ----------
+    df_files : pandas dataframe
+        .
+    folders : str
+        a string containing multiple folders, separated by newlines.
+    ref_channel : str
+        a string defining which part of the filename corresponds to a channel label.
+    dialog_box : pysimplegui textbox
+        the dialoge box of the registration window, for printing messages/errors.
+    Returns
+    -------
+    df_channels : pandas dataframe
+        a pandas dataframe containing the filename and channel name of files 
+        corresponding to additional channels of each image file in the original 
+        df_files dataframe.
+    """
+    # Make sure folders is a list of folder paths:
+    folders = folders.split("\n")
+    file_names = df_files["file name"].unique()
+    
+    # Initialize df_channels:
+    df_channels = pd.DataFrame(columns=['file name', 'extra channel name', 'full path'])
+    skipped_files = False
+    for file_name in file_names:
+        try:
+            file_name_part1, file_name_part2 = file_name.split(ref_channel)
+            file_pattern = os.path.join("**", file_name_part1+r"*"+file_name_part2)
+            
+            for folder in folders:
+                new_file_names = glob.glob(os.path.join(folder, file_pattern), recursive=True)
+                for new_file_name in new_file_names:
+                    new_file_name_tail = os.path.split(new_file_name)[1]
+                    channel = new_file_name_tail.split(file_name_part1)[1].split(file_name_part2)[0]
+                    if new_file_name_tail  == file_name:
+                        pass
+                    else:
+                        # append new row to df_channels:
+                        row_data = [[file_name, channel, new_file_name]]
+                        row_columns = ['file name', 'extra channel name', 'full path']
+                        row = pd.DataFrame(row_data, columns=row_columns)
+                        df_channels = pd.concat([row, df_channels])
+                        pass
+        except:
+            skipped_files = True
+            pass
+    if skipped_files:
+        dialog_box.update(value="WARNING: some files in your project will be skipped during the registration. \n Please double check the results. ")
+    
+    return df_channels
+
+
+def create_registration_window(shared, df_landmarks, df_model, df_files):
+    """
+    Function used to register the images in the project.
+    It starts a new window where the user can specify where to save
+    the registered images, if the transformation should be applied to additional
+    channels and where the images of additional channels are located.
+    An option for binning the original images to a smaller size is also provided.
+          
+    """
+
     # GUI - Define a new window to collect input:
-    layout = [[sg.Text('Where to save the registered images ', size=(35, 1)), 
-               sg.Input(size=(25,8), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
+    layout = [
+              [sg.Text('Target folder for registered images: ', size=(30, 1)), 
+               sg.Input(size=(30,1), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
                sg.FolderBrowse()],
-              [sg.Spin([i for i in range(1,10000)], initial_value=1,size=4, key = 'Alpha'), sg.Text(': Alpha'),
-               sg.Spin([i for i in range(1,10000)], initial_value=2,size=4, key = 'Smoothing'), sg.Text(': Smoothing'),
-               sg.Spin([i for i in range(-10000,10000)], initial_value=-5,size=4, key = 'w_lines'), sg.Text(': Attraction to white lines'), ],
-              [sg.Text('Image resolution (%)',size=(20,1)),
+              [sg.Text('Snake model file: ', size=(30, 1)), 
+               sg.Input(size=(30,1), enable_events=True, key='-SNAKE-MODEL-'),
+               sg.FileBrowse()],
+              [sg.Text('Image resolution of registered images (%):',size=(38,1)),
               sg.Slider(orientation ='horizontal', key='-REGISTRATION-RESOLUTION-', range=(1,100),default_value=100)],
-              [sg.Button("Register the images ", size = (10,1), key="-REGISTRATION-SAVE-")],
-              [sg.ProgressBar(max_value=100, size=(30,10), key= "-PROGRESS-")],
-              [sg.Column(layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]],scrollable=True)]
+              [sg.Checkbox('Apply the registration to additional channels?', key="-MULTI-CHANNEL-", default=False, enable_events=True)],
+              [sg.Text("List all folders where to search images corresponding to additional channels:", visible=False, key="-TEXT-CH-")],
+              [sg.Multiline(enter_submits=False,  size = (60,5), key='-EXTRA-CHANNELS-FOLDERS-', autoscroll=True, visible=False, do_not_clear=True)],
+              [sg.Text('Insert the name of the reference channel: ', key="-TEXT-CH2-", size=(60, 1), visible=False)], 
+              [sg.Input(size=(62, 1), enable_events=True, key='-REFERENCE-CHANNEL-', visible=False)],
+              [sg.Button("Start Registration ", size = (20,2), key="-REGISTRATION-SAVE-")],
+              [sg.Text("Progress:")],
+              [sg.ProgressBar(max_value=100, size=(50,10), key= "-PROGRESS-")],
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(60, 5))]])]
               ]
     
-    
-    df_files = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name))
-    registration_window = sg.Window("Register the annotated images", layout, modal=True)
-    choice = None
+    registration_window = sg.Window("Registration of the annotated images", layout, modal=True)
+
     dialog_box = registration_window["-DIALOG-"]
+    df_snake = None
     
     while True:
         event, values = registration_window.read()
+        
+        if values["-MULTI-CHANNEL-"] == True:
+            registration_window.Element('-TEXT-CH-').Update(visible=True)
+            registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=True)
+            registration_window.Element('-TEXT-CH2-').Update(visible=True)
+            registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=True)
+
+        if values["-MULTI-CHANNEL-"] == False:
+            registration_window.Element('-TEXT-CH-').Update(visible=False)
+            registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=False)
+            registration_window.Element('-TEXT-CH2-').Update(visible=False)
+            registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=False)
+      
+        if event == '-SNAKE-MODEL-':
+            df_snake = pd.read_csv(values['-SNAKE-MODEL-'])              
+
         if event == '-REGISTRATION-SAVE-':
-            alpha = values['Alpha']
-            smoothing = values['Smoothing']
-            w_line = values['w_lines']
-            # getting the path/directory of the images using a path of the csv file
-            folder_dir = str(os.path.dirname(df_files["full path"][0]))
+            # Index for loading bar:
+            loading_bar_i=0   
             
-            try:
-                _, _, files = next(os.walk(folder_dir))
-                file_count = len(files)
-                os.chdir(values['-REGISTERED-IMAGES-FOLDER-'])
-                
-            except: 
-                dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Missing path input.')
-            
-            progress_bar=0
-            # Getting reference landmarks + snake
+            # Getting reference landmarks
             c_dst=[]
-            img = shared['ref_image']
             landmarks_list = df_model["name"].values
             for landmark in shared['list_landmarks']:
                 [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
                 c_dst.append([x,y])
-            # Getting snake landmarks
-            LM = []
-            N=[]
-            for i in range(len(df_lines["Lmk1"])-6):
-            # for i in range(1):
-                LMref=[]
-                lm1 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk1"][i], "target"].values[0])
-                lm2 = ast.literal_eval(df_model.loc[df_model["name"]==df_lines["Lmk2"][i], "target"].values[0])
 
-                snk = snake_contour(img,lm1[1],lm1[0],lm2[1],lm2[0],alpha,smoothing,w_line)
-                if len(snk)>=10:
-                      x = math.ceil(len(snk)*1/3)
-                      snk = [snk[0]] + [snk[x]] + [snk[2*x]] + [snk[-1]]
-                      snk = [snk[x].tolist() for x in range(len(snk))]
-                      
-                LMref.append(snk[1:-1])
-                
-                N.append(len(snk))
-                c_dst.extend(LMref[0])
-            shape = shared['ref_image'].size
-            c_dst = c_dst/np.asarray(shape)
+            # Getting snake landmarks for reference
+            if df_snake is not None:
+                df_snake["N_points"] = 0
+                for index, row in df_snake.iterrows():
+                    # get the positions of the two landmarks in target image:
+                    lmk1_name, lmk2_name  = row["Lmk1"], row["Lmk2"]
+                    lmk1_pos = ast.literal_eval(df_model.loc[df_model["name"]==lmk1_name, "target"].values[0])
+                    lmk2_pos = ast.literal_eval(df_model.loc[df_model["name"]==lmk2_name, "target"].values[0])
+                    alpha = row["alpha"]
+                    smoothing = row["smoothing"]
+                    w_line = row["w_line"]
+                    ref_image = cv2.imread(os.path.join(shared['proj_folder'], ref_image_name),  cv2.IMREAD_ANYDEPTH)
+                    snk = snake_contour(ref_image, lmk1_pos[1], lmk1_pos[0], lmk2_pos[1], lmk2_pos[0], alpha, smoothing, w_line)
+                    df_snake.loc[index,"N_points"] = len(snk)            
+                    c_dst.extend(snk[1:-1].tolist())
+    
+            c_dst = np.reshape(c_dst,(len(c_dst),2))
+            shape_dst = np.asarray(shared['ref_image'].size)
+            c_dst = c_dst/shape_dst
             
+            # Get the images and their landmarks
+            file_names = df_files["file name"].unique()
+            file_count = len(file_names)
+            
+            if values["-MULTI-CHANNEL-"]:
+                folders = values['-EXTRA-CHANNELS-FOLDERS-']
+                ref_channel = values['-REFERENCE-CHANNEL-']
+                df_channels = create_channels_dataframe(df_files, folders, ref_channel, dialog_box)
 
-            
-            
-            # Checking for missing landmarks
-            NanLandmarks = df_landmarks[df_landmarks.isnull().any(axis=1)]['file name'].values  
-            
-            # get images and their landmarks
-            k=0
-            for images in os.listdir(folder_dir):
-                if str(images) in NanLandmarks : 
-                    k+=1
-                    progress_bar += 1
-                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Landmark missing for ' + str(images) + ' it has been skipped')
-                    continue
-                else : 
-                    
-                    pass
-                path = df_files.loc[df_files["file name"]==str(images),"full path"].astype('string').values[0]
-                img = cv2.imread(str(path))
+            # create a dataframe to store the info about the registered images, 
+            # which will also be saved in the destination folder:
                 
+            df_info = pd.DataFrame(columns=['file name', 'channel', 'image quality', 'notes'])
+            
+            # Start looping through the images to register:
+            for file_name in file_names:
+                # Refresh the dialog box:
+                dialog_box.update(value='Image registration in progress')
                 
-                # get image landmarks
+                # Open the source image:
+                file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
+                img = cv2.imread(file_path,  cv2.IMREAD_ANYDEPTH)
+                shape_src = np.asarray(img.shape)
+                
+                # Get image landmarks
                 c_src=[]
+ 
                 for LM in landmarks_list:
-                    
-                    LM_position = df_landmarks.loc[df_landmarks["file name"]==str(images), LM].values[0]
-                    try :
+                    try:
+                        LM_position = df_landmarks.loc[df_landmarks["file name"]==file_name, LM].values[0]
                         c_src.append(ast.literal_eval(LM_position))
-                    except :
-                        continue
-                    
-                    
+                    except:
+                        pass
+                
                 # Get snake image landmarks
+                if df_snake is not None:
+                    # binning:
+                    binning = np.max([1, np.round( max(shape_src)/max(shape_dst) )])
+                    for index, row in df_snake.iterrows():
+                        # get the positions of the two landmarks in target image:
+                        lmk1_name = row["Lmk1"]
+                        lmk2_name = row["Lmk2"]
+                        lmk1_pos = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk1_name ].values[0])
+                        lmk2_pos = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk2_name ].values[0])
+                        alpha = row["alpha"]
+                        smoothing = row["smoothing"]
+                        w_line = row["w_line"]
+                        N = row["N_points"]
+                        snk = snake_contour(img, lmk1_pos[1], lmk1_pos[0], lmk2_pos[1], lmk2_pos[0], alpha, smoothing, w_line, N=N, binning=binning)
+                        c_src.extend(snk[1:-1].tolist())
 
-                LM = []
-                for i in range(len(df_lines["Lmk1"])-6):
-                    LM = []
-                    df_landmarks.loc[df_landmarks["file name"] == df_files["file name"],"LV2-end"].values[0]
-                    lm1 = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"] == df_files["file name"][k],df_lines["Lmk1"][i]].values[0])
-                    lm2 = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"] == df_files["file name"][k],df_lines["Lmk2"][i]].values[0])
-                    # alpha = (df_lines.loc[df_lines["Lmk1"][i]==df_model["name"], "alpha"])
-
-                    snk = [snake_contour(img,lm1[1],lm1[0],lm2[1],lm2[0], alpha, smoothing, w_line, N=N[i])]
-
-                    snk = [snk[x].tolist() for x in range(len(snk))]
-                    
-                    LM.extend(snk)
-                    c_src.extend(LM[0][1:-1])
-                shape = img.size
-                c_src = c_src/np.asarray([img.shape[1],img.shape[0]])
+                np.reshape(c_src,(len(c_src),2))
+                
+                # Check if some landmarks are missing, and skip the image
+                if len(c_src) != len(c_dst):
+                    loading_bar_i+=1
+                    continue            
+       
+                c_src = c_src/np.asarray([img.shape[1], img.shape[0]])
+                
+                # Apply tps, the aspect ratio of the warped image is the same as the target image but with the resolution
+                # of the source image.
+                warped_shape = tuple( (shape_dst*max(shape_src)/max(shape_dst)).astype(int) )
+                warped = TPSwarping(img, c_src, c_dst, warped_shape)
                 
                 # Resize the image according to the slider value
-                size = img.shape[0:2]*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
+                size = warped.shape*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
                 size = [int(x) for x in size]
-                img = cv2.resize(img,(size[1],size[0]))
+                warped = cv2.resize(warped,(size[1],size[0]))
                 
+                destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)
+                cv2.imwrite(destination_path, warped)
                 
-                # Apply tps 
+                image_quality = df_files.loc[df_files["file name"] == file_name, "image quality"].values[0]
+                notes = df_files.loc[df_files["file name"] == file_name, "notes"].values[0]
+                df_info_row_data = [[file_name, "registration", image_quality, notes]]
+                df_info_row_columns = ['file name', 'channel', 'image quality', 'notes']
+                df_info_row = pd.DataFrame(df_info_row_data, columns=df_info_row_columns)
+                df_info = pd.concat([df_info_row, df_info])
+                dialog_box.update(value=dialog_box.get()+'\n - ' + file_name + ' has been registered')
+                
+                if values["-MULTI-CHANNEL-"]:
+                    temp_df = df_channels.loc[df_channels["file name"] == file_name]
+                    channels = temp_df['extra channel name'].unique()
+                    for ch in channels:
+                         ch_file_path = temp_df.loc[temp_df['extra channel name']==ch,"full path"].values[0]
+                         ch_file_name = os.path.basename(ch_file_path)
+                         ch_img = cv2.imread(ch_file_path,  cv2.IMREAD_ANYDEPTH)
+                         ch_warped = TPSwarping(ch_img, c_src, c_dst, warped_shape)
+                         ch_warped = cv2.resize(ch_warped,(size[1],size[0]))
+                         ch_destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], ch_file_name)
+                         cv2.imwrite(ch_destination_path, ch_warped)
+                         df_info_row_data = [[ch_file_name, ch, image_quality, notes]]
+                         df_info_row = pd.DataFrame(df_info_row_data, columns=df_info_row_columns)
+                         df_info = pd.concat([df_info_row, df_info])
+                         dialog_box.update(value=dialog_box.get()+'\n - ' + ch_file_name + ' has been registered')
 
-                try : 
-                    warped = TPSwarping(img, c_src, c_dst, img.shape[0:2])
-                except : 
-                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the warping of' + str(images))
-                    continue
-                
-                k+=1
-                
-                cv2.imwrite(str(images) , warped)
-                
-                try:
-                    dialog_box.update(value=dialog_box.get()+'\n - ' + str(images) + ' has been registered')
-            
-                except:
-                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Problem in the registration of' + str(images))
-                    
                 # update the loading bar
-                progress_bar+=1
-                registration_window["-PROGRESS-"].update((progress_bar/file_count)*100)
-            
-            dialog_box.update(value=dialog_box.get()+'\n - All of the images have been registered')
+
+                loading_bar_i+=1
+                registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
+
+            dialog_box.update(value='\n - All of the images have been registered')
+            df_info = df_info.reset_index(drop=True)
+            df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'))
             
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
+
     registration_window.close()
     
     return
-
 def CNN_create(window,X_train,y_train,X_test,y_test,shared,values):
     '''
     Create a CNN model using the create_CNN function

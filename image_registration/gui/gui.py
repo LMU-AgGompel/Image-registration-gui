@@ -112,7 +112,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             merge_projects()
             
         if event == '-REGISTRATION-':
-            create_registration_window(shared,df_landmarks,df_model,df_files, df_lines)
+            create_registration_window(shared, df_landmarks, df_model, df_files)
         
         if event == '-DATA-AUG-':
             data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, values["-DATA-NUM-"])
