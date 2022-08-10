@@ -758,6 +758,9 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
     registration_window.close()
     
     return
+
+
+
 def CNN_create(window,X_train,y_train,X_test,y_test,shared,values):
     '''
     Create a CNN model using the create_CNN function
