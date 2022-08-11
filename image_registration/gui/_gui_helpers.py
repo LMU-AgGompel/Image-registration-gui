@@ -28,8 +28,6 @@ df_files_name = "images_dataframe.csv"
 
 df_landmarks_name = "landmarks_dataframe.csv"
 
-df_lines_name = "lines_dataframe.csv"
-
 df_model_name = "model_dataframe.csv"
 
 df_channels_name = "extra_channels_dataframe.csv"
@@ -600,28 +598,31 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
     while True:
         event, values = registration_window.read()
         
-        if values["-MULTI-CHANNEL-"] == True:
-            registration_window.Element('-TEXT-CH-').Update(visible=True)
-            registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=True)
-            registration_window.Element('-TEXT-CH2-').Update(visible=True)
-            registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=True)
-
-        if values["-MULTI-CHANNEL-"] == False:
-            registration_window.Element('-TEXT-CH-').Update(visible=False)
-            registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=False)
-            registration_window.Element('-TEXT-CH2-').Update(visible=False)
-            registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=False)
-      
+        if event == "-MULTI-CHANNEL-":
+            
+            if values["-MULTI-CHANNEL-"] == True:
+                registration_window.Element('-TEXT-CH-').Update(visible=True)
+                registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=True)
+                registration_window.Element('-TEXT-CH2-').Update(visible=True)
+                registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=True)
+    
+            if values["-MULTI-CHANNEL-"] == False:
+                registration_window.Element('-TEXT-CH-').Update(visible=False)
+                registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=False)
+                registration_window.Element('-TEXT-CH2-').Update(visible=False)
+                registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=False)
+          
         if event == '-SNAKE-MODEL-':
             df_snake = pd.read_csv(values['-SNAKE-MODEL-'])              
 
         if event == '-REGISTRATION-SAVE-':
             # Index for loading bar:
             loading_bar_i=0   
-            
+            dialog_box.update(value='Registration started, this may take a while..')
             # Getting reference landmarks
             c_dst=[]
             landmarks_list = df_model["name"].values
+            
             for landmark in shared['list_landmarks']:
                 [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
                 c_dst.append([x,y])
@@ -650,6 +651,8 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
             file_names = df_files["file name"].unique()
             file_count = len(file_names)
             
+            # If the multiple channels option is selected, create the dataframe 
+            # with the file names of corresponding images.
             if values["-MULTI-CHANNEL-"]:
                 folders = values['-EXTRA-CHANNELS-FOLDERS-']
                 ref_channel = values['-REFERENCE-CHANNEL-']
@@ -659,6 +662,7 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
             # which will also be saved in the destination folder:
                 
             df_info = pd.DataFrame(columns=['file name', 'channel', 'image quality', 'notes'])
+            
             
             # Start looping through the images to register:
             for file_name in file_names:
@@ -680,6 +684,11 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
                     except:
                         pass
                 
+                # Check if some landmarks are missing, and skip the image
+                if len(c_src) != len(landmarks_list):
+                    loading_bar_i+=1
+                    continue 
+                
                 # Get snake image landmarks
                 if df_snake is not None:
                     # binning:
@@ -699,10 +708,7 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
 
                 np.reshape(c_src,(len(c_src),2))
                 
-                # Check if some landmarks are missing, and skip the image
-                if len(c_src) != len(c_dst):
-                    loading_bar_i+=1
-                    continue            
+        
        
                 c_src = c_src/np.asarray([img.shape[1], img.shape[0]])
                 
@@ -716,6 +722,7 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
                 size = [int(x) for x in size]
                 warped = cv2.resize(warped,(size[1],size[0]))
                 
+                # Save the registered image
                 destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)
                 cv2.imwrite(destination_path, warped)
                 
@@ -727,6 +734,8 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
                 df_info = pd.concat([df_info_row, df_info])
                 dialog_box.update(value=dialog_box.get()+'\n - ' + file_name + ' has been registered')
                 
+                # If the multiple channels option is selected, apply the thin-plate-spline
+                # transformation to the additional images.
                 if values["-MULTI-CHANNEL-"]:
                     temp_df = df_channels.loc[df_channels["file name"] == file_name]
                     channels = temp_df['extra channel name'].unique()
@@ -744,7 +753,6 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
                          dialog_box.update(value=dialog_box.get()+'\n - ' + ch_file_name + ' has been registered')
 
                 # update the loading bar
-
                 loading_bar_i+=1
                 registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
 
@@ -754,7 +762,7 @@ def create_registration_window(shared, df_landmarks, df_model, df_files):
             
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
-
+        
     registration_window.close()
     
     return

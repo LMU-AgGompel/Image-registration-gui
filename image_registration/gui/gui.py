@@ -79,7 +79,6 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 df_files       = pd.read_csv( os.path.join(shared['proj_folder'], df_files_name) )
                 df_landmarks   = pd.read_csv( os.path.join(shared['proj_folder'], df_landmarks_name) )
                 df_model       = pd.read_csv( os.path.join(shared['proj_folder'], df_model_name) )
-                df_lines       = pd.read_csv( os.path.join(shared['proj_folder'], df_lines_name) )
                 
                 shared['ref_image'] = open_image(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
                 shared['im_index'] = 0
