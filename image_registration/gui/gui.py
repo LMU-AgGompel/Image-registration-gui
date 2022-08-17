@@ -160,7 +160,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 update_image(shared['curr_image'], main_window, graph_canvas_width)
           
         if event == '-DATA-AUG-':
-            data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, values["-DATA-NUM-"])
+            data_augmentation(shared, df_landmarks, df_files, df_model, values["-DATA-NUM-"])
         
         if event == '-CNN-CREATE-':
             X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
@@ -174,7 +174,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             threading.Thread(target = image_registration.CNN.predict_lm, args = (df_files, df_model, values, window, shared), daemon=True).start()
             #image_registration.CNN.predict_lm(df_files, df_model, values, window, shared)
             
-        window['-DATA-AUG-'].update('Augment by ' + str(int(values['-DATA-NUM-'])) + ' times')
+        #window['-DATA-AUG-'].update('Augment by ' + str(int(values['-DATA-NUM-'])) + ' times')
         
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current

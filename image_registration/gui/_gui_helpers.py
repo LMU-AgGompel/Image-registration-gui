@@ -841,71 +841,54 @@ def CNN_continue(window,X_train,y_train,X_test,y_test,shared,values):
     window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
     window.Refresh()
     
-def rotate(coord, angle, img_size):
-    """
-    Rotate a list of coordinates counterclockwise by a given angle in radians around the image center.
-
-    Parameters :
-
-        list = list of landmarks coordinates in an array
-        angle = angle of rotation (clockwise)
-        img_size = tuple of the image shape
-
-    Returns :
-
-        outlist = list of all the modified landmarks coordinates in an array
-    """
-    outlist=[]
-    ox, oy = img_size[1]/2, img_size[0]/2
-    for i in range(len(coord)):
-        px, py = coord[i]
-        qx = round(ox + math.cos(angle) * (px - ox) - math.sin(angle) * (py - oy),2)
-        qy = round(oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy),2)
-        outlist.append([qx,qy])
-    return outlist
-
-def data_augmentation(shared, df_landmarks, df_files, df_landmarks_name, augmented_by_x):
+def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentation):
     
-    # Getting the global project folder
-    os.chdir(shared['proj_folder'])
-    global_folder = os.path.normpath(os.getcwd() + os.sep + os.pardir)
-    os.chdir(global_folder)
+    aug_data_folder = os.path.join(shared['proj_folder'], "augmented_data")
     
     # Creating the folder for the images + csv file
     try : 
-        os.mkdir('augmented_data') 
+        os.mkdir(aug_data_folder) 
     except : 
         print('folder already exist')
-        files = glob.glob(global_folder + '/augmented_data/*')
+        files = glob.glob(os.path.join(aug_data_folder,"*"))
         for f in files:
             os.remove(f)
-
-
-    # Getting into the images folder
-
-    os.chdir(os.path.normpath(df_files["full path"][0] + os.sep + os.pardir))
-
-
-    # shutil.copy(shared['proj_folder'] + '/' + df_landmarks_name,global_folder + '/augmented_data/')
-
-    df_landmarks_np = pd.read_csv(shared['proj_folder'] + '/' + df_landmarks_name).to_numpy()
-
-    for i in range(len(df_landmarks_np)):
-        for j in range(len(df_landmarks_np[i])-1):
-            df_landmarks_np[i][j+1] = ast.literal_eval((df_landmarks_np[i][j+1]))
+    
+    # loop through all the images and randomly rotate images and their corresponding landmarks:
+    df_landmarks_augmented = df_landmarks.copy()
+    df_landmarks_augmented = df_landmarks_augmented.dropna()
+    df_landmarks_augmented = df_landmarks_augmented.reset_index()
+    
+    for file_name in df_landmarks_augmented["file name"].unique():
         
-    output_landmarks= []
-    for i in range(augmented_by_x * len(df_landmarks)):
-        angle = rd.randint(0,359)
-        img = Image.open(df_landmarks_np[i%len(df_landmarks)][0])
-        rot = img.rotate(angle)
-        rot.save(global_folder + '/augmented_data/' + str(i)+df_landmarks_np[i%len(df_landmarks)][0])
-        clist = rotate(df_landmarks_np[i%len(df_landmarks)][1:], math.radians(-angle), (img.size[0],img.size[1]))
-        clist.insert(0,(str(i) + df_landmarks_np[i%len(df_landmarks)][0]))
-        output_landmarks.append(clist)
+        img = Image.open( df_files.loc[df_files["file name"] == file_name, "full path"].values[0] )
+        img.save( os.path.join(aug_data_folder, file_name) )
+        
+        for k in range(n_data_augmentation):
+            
+            angle  = rd.randint(0, 360)
+            ox, oy = img.size[0]/2, img.size[1]/2
+            new_file_name = str(k)+"_"+file_name
+    
+            rotated_image = img.rotate(-angle)
+            rotated_image.save(os.path.join(aug_data_folder, new_file_name))
+            
+            df_landmarks_augmented.loc[len(df_landmarks_augmented.index), "file name"] = new_file_name
+            xs = []
+            ys = []
+            
+            rad_angle = angle*math.pi/180
+            for lmk in df_model["name"].unique():
+                x,y = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk].values[0])
+                qx = round(ox + math.cos(rad_angle) * (x - ox) - math.sin(rad_angle) * (y - oy))
+                qy = round(oy + math.sin(rad_angle) * (x - ox) + math.cos(rad_angle) * (y - oy))
+                xs.append(qx)
+                ys.append(qy)
+                df_landmarks_augmented.loc[df_landmarks_augmented["file name"]==new_file_name, lmk] = str([qx,qy])
 
-    rot_lm_df = pd.DataFrame(output_landmarks, columns = df_landmarks.columns.values)
-    rot_lm_df.to_csv(global_folder + '/augmented_data/' + 'landmarks.csv', index=False)
+    df_landmarks_augmented.to_csv(os.path.join(aug_data_folder, "augmented_landmarks.csv"))
+    
+    return
 
 
 def merge_projects():
