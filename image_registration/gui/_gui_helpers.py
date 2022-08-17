@@ -1185,10 +1185,8 @@ def make_main_window(size, graph_canvas_width):
                      sg.Text('No', text_color=('red'), size= (30,1), key = "-MODEL-RUN-STATE-")],
                     [sg.Button('Stop training',size = (15,1), key = '-STOP-TRAINING-')],
                     [sg.Text('')],
-                    [sg.Input(size=(2,1), enable_events=True, key='-IMG-FOLDER3-'),
-                     sg.FolderBrowse("Images folder",size=(12,1)),
-                     sg.Input(size=(2,1), enable_events=True, key='-MODEL-FOLDER2-'),
-                      sg.FileBrowse("Model file",size=(12,1))],
+                    [sg.Input(size=(20,1), enable_events=True, key='-MODEL-FOLDER2-'),
+                     sg.FileBrowse("Model file",size=(12,1))],
                     [sg.Button('Landmarks detection', key ='LM-DETECT')]
                     ]
     

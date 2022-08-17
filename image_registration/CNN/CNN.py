@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Wed Jul 13 12:35:49 2022
 
-@author: titouan
+@authors: titouan, stefano
 """
 
 from skimage import color
@@ -298,52 +296,56 @@ def predict_lm(df_files, df_model, values, window, shared):
     window.Refresh()
 
     # load the model and get width and height to which the images have to be rescaled:
-    model = load_model(values['-MODEL-FOLDER2-'])
-    model_width = model.input_shape[2]
-    model_height = model.input_shape[1]
-
-    # get images 
-    images = []
-
-    # importing the images, converting to grayscale and resize
-    for i in range(len(df_files["full path"])):
-        image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
-        resized = cv2.resize(image, (model_width, model_height))
-        images.append(resized)
-
-    image_width = image.shape[0]
-    image_height = image.shape[1]
+    try:
+        model = load_model(values['-MODEL-FOLDER2-'])
+        model_width = model.input_shape[2]
+        model_height = model.input_shape[1]
     
-    binning_w = image_width/model_width
-    binning_h = image_height/model_height
+        # get images 
+        images = []
     
-    X = np.asarray(images).reshape(len(df_files["full path"].unique()), model_height, model_width, 1)
-    train_predicts = model.predict(X)
+        # importing the images, converting to grayscale and resize
+        for i in range(len(df_files["full path"])):
+            image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
+            resized = cv2.resize(image, (model_width, model_height))
+            images.append(resized)
     
-    # reshape the predictions in an nd array with indexes corresponding to: file, landmark, coordinate.
-    prediction = train_predicts[:,:,np.newaxis]
-    prediction = prediction.reshape((len(df_files["file name"]), len(df_model["target"]), 2))
+        image_width = image.shape[0]
+        image_height = image.shape[1]
+        
+        binning_w = image_width/model_width
+        binning_h = image_height/model_height
+        
+        X = np.asarray(images).reshape(len(df_files["full path"].unique()), model_height, model_width, 1)
+        train_predicts = model.predict(X)
+        
+        # reshape the predictions in an nd array with indexes corresponding to: file, landmark, coordinate.
+        prediction = train_predicts[:,:,np.newaxis]
+        prediction = prediction.reshape((len(df_files["file name"]), len(df_model["target"]), 2))
+        
+        # rescale the predicted landmarks positions to the original size of the image:
+        prediction[:,:,0] = binning_h*prediction[:,:,0]
+        prediction[:,:,1] = binning_w*prediction[:,:,1]
+        
+        # TO DO: reshape the results in the usual format of the landmark dataframe
+        landmark_names = df_model['name'].values
+        df_pred_lmk    = df_files[['file name']].copy()
+        
+        for landmark in landmark_names:
+            df_pred_lmk[landmark] = np.nan
+        
+        for i in range(len(df_files["file name"])):
+            for j in range(len(landmark_names)):
+                lmk = landmark_names[j]
+                x = int(prediction[i,j,0])
+                y = int(prediction[i,j,1])
+                df_pred_lmk.loc[df_pred_lmk ["file name"]==df_files["file name"][i], lmk] = str([x,y])
+        
+        df_pred_lmk.to_csv(os.path.join(shared['proj_folder'], 'predicted_landmarks_dataframe.csv'))
     
-    # rescale the predicted landmarks positions to the original size of the image:
-    prediction[:,:,0] = binning_h*prediction[:,:,0]
-    prediction[:,:,1] = binning_w*prediction[:,:,1]
-    
-    # TO DO: reshape the results in the usual format of the landmark dataframe
-    landmark_names = df_model['name'].values
-    df_pred_lmk    = df_files[['file name']].copy()
-    
-    for landmark in landmark_names:
-        df_pred_lmk[landmark] = np.nan
-    
-    for i in range(len(df_files["file name"])):
-        for j in range(len(landmark_names)):
-            lmk = landmark_names[j]
-            x = prediction[i,j,0]
-            y = prediction[i,j,1]
-            df_pred_lmk.loc[df_pred_lmk ["file name"]==df_files["file name"][i], lmk] = str([x,y])
-    
-    df_pred_lmk.to_csv(os.path.join(shared['proj_folder'], 'predicted_landmarks_dataframe.csv'))
-    
+    except:
+        window["-PRINT-"].update("An error occured during landmarks prediction.")
+        
     window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
     window.Refresh()
 

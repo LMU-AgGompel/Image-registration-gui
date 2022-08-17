@@ -1,8 +1,6 @@
-
-
 '''
-  A graphical interface to annotate, place landmarks and register images, built with the PySimpleGUI TKinter framework
-  
+  A graphical interface to annotate, place landmarks and register images, 
+  built with the PySimpleGUI TKinter framework.
 '''
 
 import PySimpleGUI as sg
@@ -173,8 +171,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             threading.Thread(target = CNN_continue, args = (window, X_train, y_train, X_test, y_test, shared, values), daemon=True).start()
             
         if event == 'LM-DETECT':
-            #threading.Thread(target = image_registration.CNN.predict_lm, args = (df_files, df_model, values, window, shared), daemon=True).start()
-            image_registration.CNN.predict_lm(df_files, df_model, values, window, shared)
+            threading.Thread(target = image_registration.CNN.predict_lm, args = (df_files, df_model, values, window, shared), daemon=True).start()
+            #image_registration.CNN.predict_lm(df_files, df_model, values, window, shared)
             
         window['-DATA-AUG-'].update('Augment by ' + str(int(values['-DATA-NUM-'])) + ' times')
         
