@@ -12,7 +12,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers import Convolution2D
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 from keras.callbacks import ModelCheckpoint
 import os,cv2,ast
 import numpy as np
@@ -64,7 +64,7 @@ def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, te
     training = training.drop(['index'],axis = 1)
 
 
-    X = np.asarray(images_array).reshape(len(training.index),img_shape[1],img_shape[0],1)
+    X = np.asarray(images_array).reshape(len(training.index), img_shape[1], img_shape[0], 1)
 
     for i in range(len(training.index)):
         for j in range(0,len(training.columns)):
@@ -170,7 +170,8 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
     model.add(Dropout(0.1))
     model.add(Dense(24))
     model.summary()
-
+    
+    # 
     model.compile(optimizer='Adam',
                   loss='mse',
                   metrics=['mae'])
@@ -270,7 +271,9 @@ def continue_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, window, 
     
 def predict_lm(df_files, df_model, values, window, shared):
     '''
-    Create a csv file with the predicted coordinates of landmarks on images using the CNN model
+    Create a csv file with the predicted coordinates of landmarks on images using the CNN model.
+    It also rescales the images to match the input size of the selected model and rescales back
+    the positions of the predicted landmarks.
 
     Parameters
     ----------
@@ -290,43 +293,58 @@ def predict_lm(df_files, df_model, values, window, shared):
     None.
 
     '''
+    
     window['-MODEL-RUN-STATE-'].update('Predicting...', text_color=('purple'))
     window.Refresh()
-    
-    folder_dir = values['-IMG-FOLDER3-']
-    # get images 
-    images_array = []
-    os.chdir(folder_dir)
 
-    #importing the images and recoloring them as grayscale
-    for i in range(len(df_files["file name"])):
-        images_array.append(color.rgb2gray(cv2.imread(df_files["file name"][i])))
-
-    img = cv2.imread(df_files["file name"][0])
-    X = np.asarray(images_array).reshape(len(df_files.index), img.shape[0],img.shape[1],1)
-
-
+    # load the model and get width and height to which the images have to be rescaled:
     model = load_model(values['-MODEL-FOLDER2-'])
+    model_width = model.input_shape[2]
+    model_height = model.input_shape[1]
+
+    # get images 
+    images = []
+
+    # importing the images, converting to grayscale and resize
+    for i in range(len(df_files["full path"])):
+        image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
+        resized = cv2.resize(image, (model_width, model_height))
+        images.append(resized)
+
+    image_width = image.shape[0]
+    image_height = image.shape[1]
+    
+    binning_w = image_width/model_width
+    binning_h = image_height/model_height
+    
+    X = np.asarray(images).reshape(len(df_files["full path"].unique()), model_height, model_width, 1)
     train_predicts = model.predict(X)
     
+    # reshape the predictions in an nd array with indexes corresponding to: file, landmark, coordinate.
+    prediction = train_predicts[:,:,np.newaxis]
+    prediction = prediction.reshape((len(df_files["file name"]), len(df_model["target"]), 2))
     
-
-    prediction = []
+    # rescale the predicted landmarks positions to the original size of the image:
+    prediction[:,:,0] = binning_h*prediction[:,:,0]
+    prediction[:,:,1] = binning_w*prediction[:,:,1]
     
-    for j in range(len(df_files["file name"])):
-        
-        a = np.reshape(train_predicts[j],(1,len(df_model["target"])*2))
-        a = np.reshape(a,(len(df_model["target"]),2))
-        prediction.append(a)
-        
+    # TO DO: reshape the results in the usual format of the landmark dataframe
+    landmark_names = df_model['name'].values
+    df_pred_lmk    = df_files[['file name']].copy()
     
-    with open(shared['proj_folder'] + str('/predicted_landmarks_dataframe.csv'),'w',newline='') as file :
-
-        write = csv.writer(file,delimiter = ',',quoting = csv.QUOTE_NONE, escapechar=' ')
-        write.writerow(df_model["name"].values)
-        write.writerows(prediction)
-
+    for landmark in landmark_names:
+        df_pred_lmk[landmark] = np.nan
+    
+    for i in range(len(df_files["file name"])):
+        for j in range(len(landmark_names)):
+            lmk = landmark_names[j]
+            x = prediction[i,j,0]
+            y = prediction[i,j,1]
+            df_pred_lmk.loc[df_pred_lmk ["file name"]==df_files["file name"][i], lmk] = str([x,y])
+    
+    df_pred_lmk.to_csv(os.path.join(shared['proj_folder'], 'predicted_landmarks_dataframe.csv'))
+    
     window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
     window.Refresh()
-        
+
     return 

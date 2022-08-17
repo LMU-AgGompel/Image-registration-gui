@@ -501,7 +501,7 @@ def create_new_project():
 
 def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
     """
-    Function used to generate to locate the image files of additional channels 
+    Function used to locate the image files of additional channels 
     corresponding to each image of the reference channels in the project.
     The function considers all the files included in the df_files dataframe and 
     look in a list of folders for files with a matching name except for the 
@@ -553,20 +553,36 @@ def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
         except:
             skipped_files = True
             pass
+        
     if skipped_files:
         dialog_box.update(value="WARNING: some files in your project will be skipped during the registration. \n Please double check the results. ")
     
     return df_channels
 
 
-def create_registration_window(shared, df_landmarks, df_model, df_files):
+def registration_window(shared, df_landmarks, df_model, df_files):
     """
     Function used to register the images in the project.
     It starts a new window where the user can specify where to save
     the registered images, if the transformation should be applied to additional
     channels and where the images of additional channels are located.
     An option for binning the original images to a smaller size is also provided.
-          
+
+    Parameters
+    ----------
+    shared : dictionary
+        dictionary of data shared across the software.
+    df_landmarks : dataframe
+        dataframe with landmark positions.
+    df_model : dataframe
+        dataframe with reference landmark positions.
+    df_files : dataframe
+        dataframe with file names, paths and quality of the images of current project.
+
+    Returns
+    -------
+    None.
+ 
     """
 
     # GUI - Define a new window to collect input:
@@ -896,7 +912,7 @@ def merge_projects():
     """
     Function used to merge two existing projects.
     It opens a new graphical window where the user sleect the paths to the two
-    proojects to merge and the path where to create the new project.
+    projects to merge and the path where to save the new merged project.
 
     Finally, it creates all the new project files in the target folder.
           
@@ -1071,7 +1087,7 @@ def add_new_images(shared, df_files, df_landmarks, df_model):
 
 def select_image(shared, df_files):
     """
-    Function used to jump to a specific imag ein the current project.
+    Function used to jump to a specific image in the current project.
     It creates a pop-up window and allows to search among all the file names 
     included in the current project.
     It returns an updated 'shared' dictionary where the index of the current image 
