@@ -13,4 +13,4 @@ __author__ = 'Stefano Ceolin'
 
 from image_registration.gui.gui import start_image_registration_GUI as start
 from image_registration.registration.TPS import TPSwarping as TPSwarping
-from image_registration.CNN.CNN import initialize_CNN, create_CNN, continue_CNN
+from image_registration.CNN.CNN import data_preprocessing_for_CNN, create_CNN, continue_CNN

@@ -842,6 +842,26 @@ def CNN_continue(window,X_train,y_train,X_test,y_test,shared,values):
     window.Refresh()
     
 def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentation):
+    """
+
+    Parameters
+    ----------
+    shared : TYPE
+        DESCRIPTION.
+    df_landmarks : TYPE
+        DESCRIPTION.
+    df_files : TYPE
+        DESCRIPTION.
+    df_model : TYPE
+        DESCRIPTION.
+    n_data_augmentation : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
     
     aug_data_folder = os.path.join(shared['proj_folder'], "augmented_data")
     

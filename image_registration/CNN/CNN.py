@@ -18,68 +18,60 @@ import itertools
 import csv
 import pandas as pd
 
-def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, test_ratio=0.3):
+def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, test_ratio=0.3):
     '''
-    Function to initalize the data for the neural network
+    Function to preprocess the data for the neural network
 
     Parameters
     ----------
-    shared : TYPE
+    df_landmarks : pandas dataframe
         DESCRIPTION.
-    df_landmarks : TYPE
+    df_files     : pandas dataframe
         DESCRIPTION.
-    df_files : TYPE
+    df_model     : pandas dataframe
         DESCRIPTION.
-    test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
+    test_ratio   : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
 
     Returns
     -------
     X_train : X coordinates array of training data
-    X_test : X coordinates array of testing data
+    X_test  : X coordinates array of testing data
     y_train : y coordinates array of training data
-    y_test : y coordinates array of testing data
+    y_test  : y coordinates array of testing data
 
     '''
+    # TO DO: Check if augmented data folder exists and import data from there?
+    
     # Importing files
-    training = df_landmarks
-    training = training.dropna()
-    training = training.reset_index()
-    folder_dir = path
-    
-    
+    training_data = df_landmarks.copy()
+    training_data = training_data.dropna()
+    training_data = training_data.reset_index()
+    training_data = pd.merge(training_data, df_files, on=["file name"])
+
     # get images and their landmarks
     images_array = []
-    
-    os.chdir(folder_dir)
+    all_landmarks_positions = []
     
     #importing the images and recoloring them as grayscale
-    for i in range(len(training["file name"])):
-        images_array.append(color.rgb2gray(cv2.imread(training["file name"][i])))
-
-
-    # Removing images with empty values
-    training = training.drop(["file name"], axis=1)
-    training = training.drop(['index'],axis = 1)
-
-
-    X = np.asarray(images_array).reshape(len(training.index), img_shape[1], img_shape[0], 1)
-
-    for i in range(len(training.index)):
-        for j in range(0,len(training.columns)):
-            if type(training.iloc[i][j]) == str:
-                training.iloc[i][j] = ast.literal_eval(training.iloc[i][j])
-                training.iloc[i][j+1] = ast.literal_eval(training.iloc[i][j+1])
+    for image_path in training_data["full path"].unique():
+        image = color.rgb2gray(cv2.imread( image_path ))
+        images_array.append(image)
+        
+        landmark_positions = []
+        
+        for lmk in df_model["name"].unique():
+            lmk_xy = ast.literal_eval(training_data.loc[training_data["full path"]==image_path, lmk].values[0])
+            landmark_positions += lmk_xy
+        
+        all_landmarks_positions.append(landmark_positions)
     
-    b=[]
-    c=[]
-    for k in range(len(training.index)):
-        for l in range(0,len(training.columns)):
-            b += training.iloc[k][l]
-        c.append(b)
-        b=[]
+    img_shape = image.shape
+    
+    # reshape the images to be compatible with the neural network:
+    X = np.asarray(images_array).reshape(len(training_data.index), img_shape[1], img_shape[0], 1)
+    y = np.array(all_landmarks_positions)
 
-    y2 = np.array(c)
-    X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=42)
 
     return X_train, X_test, y_train, y_test
 
@@ -89,13 +81,13 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
 
     Parameters
     ----------
-    X_train : Array of iamge training data
-    X_test : Array of image testing data
+    X_train : Array of image training data
+    X_test  : Array of image testing data
     y_train : Coordinates array of training data
-    y_test : Coordinates array of testing data
+    y_test  : Coordinates array of testing data
     model_folder : str, folder where to save the model
-    nb_epochs : int, number of training iterations
-    img_shape : tuple, shape of images
+    nb_epochs    : int, number of training iterations
+    img_shape    : tuple, shape of images
     window :
     values : 
     nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.

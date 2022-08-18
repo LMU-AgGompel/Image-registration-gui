@@ -163,11 +163,11 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             data_augmentation(shared, df_landmarks, df_files, df_model, values["-DATA-NUM-"])
         
         if event == '-CNN-CREATE-':
-            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
+            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(df_landmarks, df_files, df_model)
             threading.Thread(target=CNN_create, args=(window, X_train, y_train, X_test, y_test, shared, values), daemon=True).start()
             
         if event == '-CNN-CONTINUE-':
-            X_train, X_test, y_train, y_test = image_registration.initialize_CNN(shared,values['-IMG-FOLDER2-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
+            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(shared,values['-IMG-FOLDER2-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
             threading.Thread(target = CNN_continue, args = (window, X_train, y_train, X_test, y_test, shared, values), daemon=True).start()
             
         if event == 'LM-DETECT':
