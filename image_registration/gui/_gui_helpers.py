@@ -11,12 +11,12 @@ import ast
 from datetime import datetime
 import cv2
 from ..registration.TPS import TPSwarping
-from skimage.color import rgb2gray
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
-from skimage.filters import difference_of_gaussians
 import random as rd
+import threading
 import image_registration
+from tensorflow.keras.callbacks import Callback
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -356,7 +356,6 @@ def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = Non
     return snake*binning
 
 def rebin(img, binning):
-    #img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     width = int(img.shape[1] / binning)
     height = int(img.shape[0] / binning)
     dim = (width, height)
@@ -365,7 +364,9 @@ def rebin(img, binning):
 
 def enhance_edges(img, binning, smoothing):
     img = rebin(img, binning)
-    filtered_image = difference_of_gaussians(img, 2, 10)
+    # filtered_image = difference_of_gaussians(img, 2, 10)
+    # could use the following to avoid relying on scikit-image 0.19
+    filtered_image = gaussian(img, 10) - gaussian(img, 2)
     filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
     filtered_image = 1 -filtered_image
     edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
@@ -779,13 +780,11 @@ def registration_window(shared, df_landmarks, df_model, df_files):
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
         
-    registration_window.close()
-    
+    registration_window.close()    
     return
 
 
-
-def CNN_create(window,X_train,y_train,X_test,y_test,shared,values):
+def CNN_create(window,X_train,y_train,X_test,y_test, model_input_shape, df_model):
     '''
     Create a CNN model using the create_CNN function
 
@@ -809,13 +808,48 @@ def CNN_create(window,X_train,y_train,X_test,y_test,shared,values):
     '''
     window['-MODEL-RUN-STATE-'].update('Initializing...', text_color=('yellow'))
     window.Refresh()
-    image_registration.create_CNN(X_train,y_train,X_test,y_test,shared['proj_folder'], values["-EPOCHS-"], shared['curr_image'].size, window, values)
+    landmark_detection_model = image_registration.create_CNN(X_train, y_train, X_test, y_test, model_input_shape, df_model)
     window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
     window.Refresh()
-    
-def CNN_continue(window,X_train,y_train,X_test,y_test,shared,values):
+    return landmark_detection_model
+
+class window_callback(Callback):
+    """
+    Callback class to update the gui window during training
+    """
+    def __init__(self, window, nb_epochs):
+        super(window_callback, self).__init__()
+        self.window = window
+        self.epochs_left = nb_epochs
+        
+    def on_train_begin(self, logs={}):
+        self.metrics = {}
+        for metric in logs:
+            self.metrics[metric] = []
+        self.window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
+        self.window.Refresh()
+
+    def on_epoch_end(self, epoch, logs={}):
+        # Storing metrics
+        for metric in logs:
+            if metric in self.metrics:
+                self.metrics[metric].append(logs.get(metric))
+            else:
+                self.metrics[metric] = [logs.get(metric)]
+
+        self.window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(self.epochs_left))
+        self.epochs_left = self.epochs_left-1
+        self.window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(self.metrics['mae']),2)))
+        self.window.Refresh()
+        
+    def on_train_end(self, logs={}):
+        self.window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
+        self.window.Refresh()
+        
+def CNN_train(window, X_train, y_train, X_test, y_test, landmarks_detection_model, shared, values):
     '''
-    Continue the training of a model using the continue_CNN function
+    Continue the training of a model calling the train_CNN function and provide
+    an interface to the gui window through a custom Callback class
 
     Parameters
     ----------
@@ -835,11 +869,15 @@ def CNN_continue(window,X_train,y_train,X_test,y_test,shared,values):
     None.
 
     '''
-    window['-MODEL-RUN-STATE-'].update('Initializing...', text_color=('yellow'))
-    window.Refresh()
-    image_registration.continue_CNN(X_train,y_train,X_test,y_test,values["-MODEL-FOLDER-"], values["-EPOCHS-"], window, values)
-    window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
-    window.Refresh()
+    nb_epochs =  values["-EPOCHS-"]
+    callbacks_list = [window_callback(window, nb_epochs)]
+    #image_registration.train_CNN(X_train, y_train, X_test, y_test, landmark_detection_model, values["-MODEL-FOLDER-"], nb_epochs, callbacks_list)
+    threading.Thread(target = image_registration.train_CNN,
+                     args = (X_train, y_train, X_test, y_test, landmarks_detection_model, values["-MODEL-FOLDER-"], nb_epochs, callbacks_list), 
+                     daemon=True).start()
+    
+    return
+    
     
 def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentation):
     """
@@ -1169,12 +1207,8 @@ def make_main_window(size, graph_canvas_width):
                   sg.Spin([s for s in range(1,366)],initial_value=1, size=3, enable_events=True, key = "-DATA-NUM-")
                   ],
                  [sg.Text('Create a new CNN', size=(20, 1)),
-                  sg.Input(size=(2,1), enable_events=True, key='-IMG-FOLDER-'),
-                  sg.FolderBrowse("Images folder",size=(12,1), key='-IMG-FOLDER-'), 
                   sg.Button("Create", size=(12,1), key='-CNN-CREATE-')],
                  [sg.Text('Continue with a pre-trained CNN', size=(20, 1)),
-                  sg.Input(size=(2,1), enable_events=True, key='-IMG-FOLDER2-'),
-                  sg.FolderBrowse("Images folder",size=(12,1)),
                   sg.Input(size=(2,1), enable_events=True, key='-MODEL-FOLDER-'),
                   sg.FileBrowse("Model file",size=(12,1)), 
                   sg.Button("Continue", size=(20,1), key='-CNN-CONTINUE-')]]

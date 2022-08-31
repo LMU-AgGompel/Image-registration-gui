@@ -6,19 +6,16 @@ Created on Wed Jul 13 12:35:49 2022
 
 from skimage import color
 from sklearn.model_selection import train_test_split
-from keras.models import Sequential
-from keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers import Convolution2D
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D, Convolution2D, LeakyReLU
+from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.models import load_model
-from keras.callbacks import ModelCheckpoint
 import os,cv2,ast
 import numpy as np
 import itertools
-import csv
 import pandas as pd
 
-def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, test_ratio=0.3):
+def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, new_width, new_height, test_ratio=0.3):
     '''
     Function to preprocess the data for the neural network
 
@@ -55,17 +52,21 @@ def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, test_ratio=0.3)
     #importing the images and recoloring them as grayscale
     for image_path in training_data["full path"].unique():
         image = color.rgb2gray(cv2.imread( image_path ))
+        img_shape = image.shape
+        binning_x, binning_y = img_shape[0]/new_width, img_shape[1]/new_height 
+        image = cv2.resize(image, (new_width, new_height), interpolation = cv2.INTER_AREA)
         images_array.append(image)
         
         landmark_positions = []
         
         for lmk in df_model["name"].unique():
             lmk_xy = ast.literal_eval(training_data.loc[training_data["full path"]==image_path, lmk].values[0])
+            lmk_xy = [lmk_xy[0]/binning_x, lmk_xy[1]/binning_y]
             landmark_positions += lmk_xy
         
         all_landmarks_positions.append(landmark_positions)
     
-    img_shape = image.shape
+    img_shape = (new_width, new_height)
     
     # reshape the images to be compatible with the neural network:
     X = np.asarray(images_array).reshape(len(training_data.index), img_shape[1], img_shape[0], 1)
@@ -75,7 +76,7 @@ def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, test_ratio=0.3)
 
     return X_train, X_test, y_train, y_test
 
-def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape, window, values, nb_batch_size= 16):
+def create_CNN(X_train, y_train, X_test, y_test, img_shape, df_model):
     '''
     Function that will create a neural network from training data
 
@@ -88,6 +89,7 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
     model_folder : str, folder where to save the model
     nb_epochs    : int, number of training iterations
     img_shape    : tuple, shape of images
+    df_model:
     window :
     values : 
     nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.
@@ -98,6 +100,8 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
 
     '''
     TF_FORCE_GPU_ALLOW_GROWTH=True
+    
+    n_landmarks = len(df_model["name"].unique())
 
     model = Sequential()
     model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape = img_shape[::-1] + (1,) ))
@@ -128,7 +132,6 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
     model.add(MaxPool2D(pool_size=(2, 2)))
 
     model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
-    # model.add(BatchNormalization())
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
 
@@ -158,48 +161,20 @@ def create_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, img_shape,
     model.add(Flatten())
     model.add(Dense(512,activation='relu'))
     model.add(Dropout(0.1))
-    model.add(Dense(24))
-    model.summary()
+    model.add(Dense(2*n_landmarks))
+    
+    #model.summary()
     
     # 
-    model.compile(optimizer='Adam',
-                  loss='mse',
-                  metrics=['mae'])
-
+    model.compile(optimizer='Adam', loss='mse', metrics=['mae'])
     
-    window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
-    window.Refresh()
-    
-    if values["-INF-EPOCHS-"] == True:
-        for i in itertools.count(start=1):
-            
-            checkpoint = ModelCheckpoint(model_folder+ '/model.h5', monitor='mae', verbose=1, save_best_only=True, mode='min')
-            callbacks_list = [checkpoint]
-            model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
-            
-            window['-EPOCHS-COUNT-'].update('Epochs left : Inf')
-            window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(model.history.history['mae']),2)))
-            window.Refresh()
-            
-    else : 
-        for i in range(nb_epochs):
-            
-            checkpoint = ModelCheckpoint(model_folder+ '/model.h5', monitor='mae', verbose=1, save_best_only=True, mode='min')
-            callbacks_list = [checkpoint]
-            model.fit(X_train, y_train, epochs=1, batch_size = nb_batch_size, callbacks=callbacks_list)
+    return model
 
-            
-            window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (i+1)))
-            window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(model.history.history['mae']),2)))
-            window.Refresh()
-            
-    # Max batch size= available GPU memory bytes / 4 / (size of tensors + trainable parameters)
-    # here for 1000x1000 images : 256 000 000 000 / 4 / (1000*1000 + 256 822 328) = 248
-    
-    window['-MODEL-RUN-STATE-'].update('Saving model...', text_color=('yellow'))
-    window.Refresh()
+def load_CNN(model_path):
+    landmarks_detection_model = load_model(model_path)
+    return landmarks_detection_model
 
-def continue_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, window, values, nb_batch_size= 16):
+def train_CNN(X_train, y_train, X_test, y_test, landmarks_detection_model, model_path, nb_epochs, callbacks_list = [], nb_batch_size= 16):
     '''
     Continue the training from a former model
 
@@ -213,51 +188,29 @@ def continue_CNN(X_train,y_train,X_test,y_test,model_folder, nb_epochs, window, 
         DESCRIPTION.
     y_test : TYPE
         DESCRIPTION.
-    model_folder : folder of the model to load
+    landmarks_detection_model: tensorflow model
+    
+    model_path : str
+        path to save the current model
     nb_epochs : TYPE
         DESCRIPTION.
-    window : TYPE
-        DESCRIPTION.
-    values : TYPE
-        DESCRIPTION.
+    callbacks_list: list of callbacks objects
+    
     nb_batch_size : TYPE, optional
-        DESCRIPTION. The default is 16.
+        The default is 16.
 
     Returns
     -------
     None.
 
     '''
-    continue_model = load_model(model_folder)
     
-    window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
-    window.Refresh()
-    
-    if values["-INF-EPOCHS-"] == True:
-        for i in itertools.count(start=1):
-            checkpoint = ModelCheckpoint(model_folder, monitor='loss', verbose=1, save_best_only=True, mode='min')
-            callbacks_list = [checkpoint]
-            continue_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+    ## Has to return the model?
 
-            window['-EPOCHS-COUNT-'].update('Epochs left : Inf')
-            window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(continue_model.history.history['mae']),2)))
-            window.Refresh()
-             
-
-    else : 
-        for i in range(nb_epochs):
-            
-            checkpoint = ModelCheckpoint(model_folder, monitor='loss', verbose=1, save_best_only=True, mode='min')
-            callbacks_list = [checkpoint]
-            continue_model.fit(X_train, y_train, epochs=1, batch_size = nb_batch_size, callbacks=callbacks_list)
-        
-            window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(nb_epochs - (i+1)))
-            window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(continue_model.history.history['mae']),2)))
-            window.Refresh()
-            
-    window['-MODEL-RUN-STATE-'].update('Saving model...', text_color=('yellow'))
-    window.Refresh()
-    
+    checkpoint = ModelCheckpoint(model_path, monitor='loss', verbose=1, save_best_only=True, mode='min')
+    callbacks_list.append(checkpoint)
+    landmarks_detection_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+    return 
     
 def predict_lm(df_files, df_model, values, window, shared):
     '''
@@ -299,7 +252,7 @@ def predict_lm(df_files, df_model, values, window, shared):
         # importing the images, converting to grayscale and resize
         for i in range(len(df_files["full path"])):
             image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
-            resized = cv2.resize(image, (model_width, model_height))
+            resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
             images.append(resized)
     
         image_width = image.shape[0]

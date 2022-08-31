@@ -163,17 +163,18 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             data_augmentation(shared, df_landmarks, df_files, df_model, values["-DATA-NUM-"])
         
         if event == '-CNN-CREATE-':
-            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(df_landmarks, df_files, df_model)
-            threading.Thread(target=CNN_create, args=(window, X_train, y_train, X_test, y_test, shared, values), daemon=True).start()
-            
+            model_input_shape = (512, 512)
+            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_input_shape[0], model_input_shape[1])
+            landmarks_detection_model = CNN_create(window, X_train, y_train, X_test, y_test, model_input_shape, df_model)
+     
         if event == '-CNN-CONTINUE-':
-            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(shared,values['-IMG-FOLDER2-'], df_landmarks, df_files,df_model, shared['curr_image'].size)
-            threading.Thread(target = CNN_continue, args = (window, X_train, y_train, X_test, y_test, shared, values), daemon=True).start()
-            
+            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_input_shape[0], model_input_shape[1])
+            CNN_train(window, X_train, y_train, X_test, y_test, landmarks_detection_model, shared, values)
+
         if event == 'LM-DETECT':
             threading.Thread(target = image_registration.CNN.predict_lm, args = (df_files, df_model, values, window, shared), daemon=True).start()
             #image_registration.CNN.predict_lm(df_files, df_model, values, window, shared)
-            
+        
         #window['-DATA-AUG-'].update('Augment by ' + str(int(values['-DATA-NUM-'])) + ' times')
         
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
