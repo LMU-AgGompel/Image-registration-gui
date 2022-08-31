@@ -1192,35 +1192,44 @@ def make_main_window(size, graph_canvas_width):
     
     # --------------------------------- Define Layout ---------------------------------
 
+    # selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
+    #                     sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
+    #                     sg.FolderBrowse(size=(20,1)),
+    #                     sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-')],
+    #                    [sg.VPush()],
+    #                    [sg.Button("Registration", size = (20,1), key="-REGISTRATION-"),
+    #                     sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((135,0),(0,0))),
+    #                     sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
+    #                     sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]]
     selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
                         sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
-                        sg.FolderBrowse(size=(20,1)),
-                        sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-')],
-                       [sg.VPush()],
-                       [sg.Button("Registration", size = (20,1), key="-REGISTRATION-"),
-                        sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((135,0),(0,0))),
+                        sg.FolderBrowse(size=(15,1)),
+                        sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-'),
+                        sg.Button("Create New project", size = (15,1), key="-NEW-PROJECT-"),
                         sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
-                        sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]]
+                        sg.Button("Merge 2 projects", size = (15,1), key="-MERGE-PROJECTS-")]]
     
-    CNN_frame = [[sg.Text('Data augmentation : ', size=(20, 1)),
-                  sg.Button("Augment by 1 times", size=(20,1), key='-DATA-AUG-'),
-                  sg.Spin([s for s in range(1,366)],initial_value=1, size=3, enable_events=True, key = "-DATA-NUM-")
-                  ],
-                 [sg.Text('Create a new CNN', size=(20, 1)),
-                  sg.Button("Create", size=(12,1), key='-CNN-CREATE-')],
-                 [sg.Text('Continue with a pre-trained CNN', size=(20, 1)),
-                  sg.Input(size=(2,1), enable_events=True, key='-MODEL-FOLDER-'),
-                  sg.FileBrowse("Model file",size=(12,1)), 
-                  sg.Button("Continue", size=(20,1), key='-CNN-CONTINUE-')]]
-
-    epochs_frame = [[sg.Text('Number of epochs : ', size=(20, 1)),
-                     sg.Spin([s for s in range(1,1000000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
-                    [sg.Checkbox('Infinte epochs', default=False, key = "-INF-EPOCHS-")],
-                    [sg.Text('Epochs left : X', size=(17, 1), key = '-EPOCHS-COUNT-'),
-                    sg.Text('Current precision : Y ', size=(28, 1), key = '-CURRENT-MAE-')],
-                    [sg.Text('Currently running :', size=(15, 1)), 
-                     sg.Text('No', text_color=('red'), size= (30,1), key = "-MODEL-RUN-STATE-")],
-                    [sg.Button('Stop training',size = (15,1), key = '-STOP-TRAINING-')],
+    CNN_creation_frame = [[sg.Text('Data augmentation : ', size=(20, 1))],
+                         [sg.Button("Augment", size=(15,1), key='-DATA-AUG-'),
+                          sg.Spin([s for s in range(1,366)],initial_value=1, size=10, enable_events=True, key = "-DATA-NUM-")],
+                         [sg.Text('Create a new CNN : ' , size=(20, 1))],
+                         [sg.Button("Create", size=(15,1), key='-CNN-CREATE-')],
+                         [sg.Text('Load a pretrained CNN : ' , size=(20, 1))],
+                         [sg.Input(size=(15,1), enable_events=True, key='-MODEL-FOLDER-'),
+                         sg.FileBrowse("Model file",size=(15,1))], 
+                         ]
+    
+    CNN_training_frame = [
+                          [sg.Text('Number of epochs : ', size=(20, 1)),
+                          sg.Spin([s for s in range(1,1000000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
+                          [sg.Button("Train current model", size=(15,1), key='-CNN-CONTINUE-')],
+                          [sg.Text('Epochs left : ', size=(17, 1), key = '-EPOCHS-COUNT-')],
+                          [sg.Text('Current precision : ', size=(28, 1), key = '-CURRENT-MAE-')],
+                          [sg.Text('Currently running :', size=(15, 1)), 
+                          sg.Text('No', text_color=('red'), size= (30,1), key = "-MODEL-RUN-STATE-")]
+                         ]
+    
+    predictions_frame = [
                     [sg.Text('')],
                     [sg.Input(size=(20,1), enable_events=True, key='-MODEL-FOLDER2-'),
                      sg.FileBrowse("Model file",size=(12,1))],
@@ -1261,17 +1270,23 @@ def make_main_window(size, graph_canvas_width):
                                 drag_submits=False,
                                 background_color='white')],
                          [sg.Checkbox('Draw Line', default = False, font = 'Arial 18', key='-LINE-',  enable_events=True)],
+                         [sg.Button("Save changes to the project", key="-SAVE-")]
                          ]
        
-    annotation_frame = [[sg.Column(image_column), sg.Column(annotation_column)]]
+    annotation_frame = [[sg.Frame("Annotate images: ", layout = [[sg.Column(image_column), sg.Column(annotation_column)]])]]
     
-    communication_window = [[sg.Text("", key="-PRINT-", size=(100, 10))]]
+    neural_network_frame = [
+                            [sg.Frame("Create or load the neural network", layout = CNN_creation_frame)], 
+                            [sg.Frame("Train the neural network", layout = CNN_training_frame)], 
+                            [sg.Frame("Predict landmarks", layout = predictions_frame)],
+                            [sg.Button("Registration", size = (15,1), key="-REGISTRATION-")]
+                            ]
     
-    layout = [[sg.Frame("Select project: ", layout = selection_frame),
-               sg.Frame("Neural network", layout = CNN_frame)],
-              [sg.Frame("Annotate images: ", layout = annotation_frame),
-               sg.Frame("Model parameters", layout = epochs_frame, vertical_alignment = 'top')],
-              [sg.Button("Save changes to the project", key="-SAVE-")],
+    communication_window = [[sg.Text("", key="-PRINT-", size=(130, 10))]]
+    
+    layout = [
+              [sg.Frame("Select project: ", layout = selection_frame)],
+              [sg.Column(annotation_frame), sg.Column(neural_network_frame,  vertical_alignment = 'top')],
               [sg.Frame("Messages: ", layout = communication_window)]
               ]
     

@@ -131,20 +131,20 @@ def create_CNN(X_train, y_train, X_test, y_test, img_shape, df_model):
     model.add(BatchNormalization())
     model.add(MaxPool2D(pool_size=(2, 2)))
 
-    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+    model.add(Convolution2D(128, (3,3), padding='same', use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
 
-    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+    model.add(Convolution2D(128, (3,3), padding='same', use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
     model.add(MaxPool2D(pool_size=(2, 2)))
 
-    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
+    model.add(Convolution2D(256, (3,3), padding='same',use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
 
-    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
+    model.add(Convolution2D(256, (3,3), padding='same',use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
     model.add(MaxPool2D(pool_size=(2, 2)))
