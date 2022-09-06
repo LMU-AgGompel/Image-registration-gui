@@ -17,6 +17,7 @@ import random as rd
 import threading
 import image_registration
 from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.models import load_model as Keras_load_model
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -34,7 +35,7 @@ df_channels_name = "extra_channels_dataframe.csv"
 
 ref_image_name = "reference_image.tif"
 
-
+df_predicted_landmarks_name = "predicted_landmarks_dataframe.csv"
 
 
 def update_image_fields(im_index, image, df_files, window, graph_canvas_width):
@@ -784,7 +785,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
     return
 
 
-def CNN_create(window,X_train,y_train,X_test,y_test, model_input_shape, df_model):
+def CNN_create(window, model_input_shape, df_model):
     '''
     Create a CNN model using the create_CNN function
 
@@ -808,19 +809,30 @@ def CNN_create(window,X_train,y_train,X_test,y_test, model_input_shape, df_model
     '''
     window['-MODEL-RUN-STATE-'].update('Initializing...', text_color=('yellow'))
     window.Refresh()
-    landmark_detection_model = image_registration.create_CNN(X_train, y_train, X_test, y_test, model_input_shape, df_model)
+    landmark_detection_model = image_registration.create_CNN(model_input_shape, df_model)
     window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
     window.Refresh()
     return landmark_detection_model
 
+def CNN_load(window, values, shared):
+    shared['CNN_model'] = Keras_load_model(values['-CNN-PATH-'])
+    model_path, model_name = os.path.split(values['-CNN-PATH-'])
+    window['-CNN-NAME-'].update(model_name)
+    return
+        
+
 class window_callback(Callback):
     """
-    Callback class to update the gui window during training
+    Customized Callback class to update the gui window during training and save
+    the modele every n epochs.
     """
-    def __init__(self, window, nb_epochs):
+    def __init__(self, window, nb_epochs, folder, save_freq=10, model_name = "landmarks_detection_model.h5"):
         super(window_callback, self).__init__()
         self.window = window
         self.epochs_left = nb_epochs
+        self.folder = folder
+        self.save_freq = save_freq
+        self.model_name = model_name
         
     def on_train_begin(self, logs={}):
         self.metrics = {}
@@ -839,14 +851,27 @@ class window_callback(Callback):
 
         self.window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(self.epochs_left))
         self.epochs_left = self.epochs_left-1
-        self.window['-CURRENT-MAE-'].update('Current precision : ' + str(round(min(self.metrics['mae']),2)))
+        if 'mae' in self.metrics:
+            self.window['-CURRENT-MAE-'].update('Current precision (mae): ' + str(round(min(self.metrics['mae']),2)))    
+        elif 'mean_absolute_error' in self.metrics:
+            self.window['-CURRENT-MAE-'].update('Current precision (mae): ' + str(round(min(self.metrics['mean_absolute_error']),2)))
+        else:
+            self.window['-CURRENT-MAE-'].update('Current precision (mse): ' + str(round(min(self.metrics['loss']),2)))
+
         self.window.Refresh()
+        
+        if self.epochs_left%self.save_freq == 0:
+            filepath = os.path.join(self.folder, self.model_name)
+            self.model.save(filepath, overwrite=True)
+            
         
     def on_train_end(self, logs={}):
         self.window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
         self.window.Refresh()
+        filepath = os.path.join(self.folder, self.model_name)
+        self.model.save(filepath, overwrite=True)
         
-def CNN_train(window, X_train, y_train, X_test, y_test, landmarks_detection_model, shared, values):
+def CNN_train(window, X_train, y_train, X_test, y_test, shared, values):
     '''
     Continue the training of a model calling the train_CNN function and provide
     an interface to the gui window through a custom Callback class
@@ -869,13 +894,54 @@ def CNN_train(window, X_train, y_train, X_test, y_test, landmarks_detection_mode
     None.
 
     '''
-    nb_epochs =  values["-EPOCHS-"]
-    callbacks_list = [window_callback(window, nb_epochs)]
-    #image_registration.train_CNN(X_train, y_train, X_test, y_test, landmark_detection_model, values["-MODEL-FOLDER-"], nb_epochs, callbacks_list)
-    threading.Thread(target = image_registration.train_CNN,
-                     args = (X_train, y_train, X_test, y_test, landmarks_detection_model, values["-MODEL-FOLDER-"], nb_epochs, callbacks_list), 
-                     daemon=True).start()
+    if shared['CNN_model']:
+        nb_epochs =  values['-EPOCHS-']
+        callbacks_list = [window_callback(window, nb_epochs, shared['proj_folder'], model_name = values['-CNN-NAME-'])]
+        #image_registration.train_CNN(X_train, y_train, X_test, y_test, shared['CNN_model'], values["-MODEL-FOLDER-"], nb_epochs, callbacks_list)
+        threading.Thread(target = image_registration.train_CNN,
+                         args = (X_train, y_train, X_test, y_test, shared['CNN_model'], shared['proj_folder'], nb_epochs, callbacks_list), 
+                         daemon=True).start()
+    else:
+        window["-PRINT-"].update("** No model available, please create or load a neural network model **")
     
+    return
+
+def CNN_predict_landmarks(df_files, df_model, window, shared, values):
+    """
+    Parameters
+    ----------
+    df_files : TYPE
+        DESCRIPTION.
+    df_model : TYPE
+        DESCRIPTION.
+    window : TYPE
+        DESCRIPTION.
+    shared : TYPE
+        DESCRIPTION.
+    values : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    if shared['CNN_model']:
+        window['-MODEL-RUN-STATE-'].update('Predicting...', text_color=('purple'))
+        window.Refresh()
+        
+        try:
+            image_registration.predict_lm(df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name)
+            #threading.Thread(target = image_registration.predict_lm, args = (df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name), daemon=True).start()
+        except:
+            window["-PRINT-"].update("An error occured during landmarks prediction.")
+            
+        window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
+        window.Refresh()
+        
+    else:
+        window["-PRINT-"].update("** No model available, please create or load a neural network model **")
+
     return
     
     
@@ -1192,15 +1258,6 @@ def make_main_window(size, graph_canvas_width):
     
     # --------------------------------- Define Layout ---------------------------------
 
-    # selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
-    #                     sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
-    #                     sg.FolderBrowse(size=(20,1)),
-    #                     sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-')],
-    #                    [sg.VPush()],
-    #                    [sg.Button("Registration", size = (20,1), key="-REGISTRATION-"),
-    #                     sg.Button("Create New project", size = (18,1), key="-NEW-PROJECT-", pad=((135,0),(0,0))),
-    #                     sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
-    #                     sg.Button("Merge projects", size = (20,1), key="-MERGE-PROJECTS-")]]
     selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
                         sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
                         sg.FolderBrowse(size=(15,1)),
@@ -1215,14 +1272,16 @@ def make_main_window(size, graph_canvas_width):
                          [sg.Text('Create a new CNN : ' , size=(20, 1))],
                          [sg.Button("Create", size=(15,1), key='-CNN-CREATE-')],
                          [sg.Text('Load a pretrained CNN : ' , size=(20, 1))],
-                         [sg.Input(size=(15,1), enable_events=True, key='-MODEL-FOLDER-'),
+                         [sg.Input(size=(15,1), enable_events=True, key='-CNN-PATH-'),
                          sg.FileBrowse("Model file",size=(15,1))], 
                          ]
     
     CNN_training_frame = [
                           [sg.Text('Number of epochs : ', size=(20, 1)),
                           sg.Spin([s for s in range(1,1000000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
-                          [sg.Button("Train current model", size=(15,1), key='-CNN-CONTINUE-')],
+                          [sg.Text('Filename of trained CNN : ' , size=(20, 1)),
+                           sg.Input(size=(15,1), enable_events=True, key='-CNN-NAME-')],
+                          [sg.Button("Train current model", size=(15,1), key='-CNN-TRAIN-')],
                           [sg.Text('Epochs left : ', size=(17, 1), key = '-EPOCHS-COUNT-')],
                           [sg.Text('Current precision : ', size=(28, 1), key = '-CURRENT-MAE-')],
                           [sg.Text('Currently running :', size=(15, 1)), 

@@ -15,7 +15,7 @@ import numpy as np
 import itertools
 import pandas as pd
 
-def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, new_width, new_height, test_ratio=0.3):
+def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, model_height, test_ratio=0.3):
     '''
     Function to preprocess the data for the neural network
 
@@ -53,30 +53,91 @@ def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, new_width, new_
     for image_path in training_data["full path"].unique():
         image = color.rgb2gray(cv2.imread( image_path ))
         img_shape = image.shape
-        binning_x, binning_y = img_shape[0]/new_width, img_shape[1]/new_height 
-        image = cv2.resize(image, (new_width, new_height), interpolation = cv2.INTER_AREA)
+        image_height = image.shape[0]
+        image_width = image.shape[1]
+        binning_w = image_width/model_width
+        binning_h = image_height/model_height
+        image = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
         images_array.append(image)
         
         landmark_positions = []
         
         for lmk in df_model["name"].unique():
             lmk_xy = ast.literal_eval(training_data.loc[training_data["full path"]==image_path, lmk].values[0])
-            lmk_xy = [lmk_xy[0]/binning_x, lmk_xy[1]/binning_y]
+            lmk_xy = [lmk_xy[0]/binning_w, lmk_xy[1]/binning_h]
             landmark_positions += lmk_xy
         
         all_landmarks_positions.append(landmark_positions)
-    
-    img_shape = (new_width, new_height)
-    
+
     # reshape the images to be compatible with the neural network:
-    X = np.asarray(images_array).reshape(len(training_data.index), img_shape[1], img_shape[0], 1)
+    X = np.asarray(images_array).reshape(len(training_data.index), model_height, model_width, 1)
     y = np.array(all_landmarks_positions)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=42)
 
     return X_train, X_test, y_train, y_test
 
-def create_CNN(X_train, y_train, X_test, y_test, img_shape, df_model):
+
+def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, test_ratio=0.3):
+    '''
+    Function to initalize the data for the neural network
+    Parameters
+    ----------
+    shared : TYPE
+        DESCRIPTION.
+    df_landmarks : TYPE
+        DESCRIPTION.
+    df_files : TYPE
+        DESCRIPTION.
+    test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
+    Returns
+    -------
+    X_train : X coordinates array of training data
+    X_test : X coordinates array of testing data
+    y_train : y coordinates array of training data
+    y_test : y coordinates array of testing data
+    '''
+    # Importing files
+    training = df_landmarks.copy()
+    training = training.dropna()
+    training = training.reset_index()
+    training = pd.merge(training, df_files, on=["file name"])
+    
+    # get images and their landmarks
+    images_array = []
+
+    #importing the images and recoloring them as grayscale
+    for i in range(len(training["full path"])):
+        image = color.rgb2gray(cv2.imread(training["full path"][i]))
+        images_array.append(image)
+        
+    img_shape = image.shape()
+    # Removing images with empty values
+    training = training.drop(["file name"], axis=1)
+    training = training.drop(['index'],axis = 1)
+
+    X = np.asarray(images_array).reshape(len(training.index),img_shape[1],img_shape[0],1)
+
+    for i in range(len(training.index)):
+        for j in range(0,len(training.columns)):
+            if type(training.iloc[i][j]) == str:
+                training.iloc[i][j] = ast.literal_eval(training.iloc[i][j])
+                training.iloc[i][j+1] = ast.literal_eval(training.iloc[i][j+1])
+    
+    b=[]
+    c=[]
+    for k in range(len(training.index)):
+        for l in range(0,len(training.columns)):
+            b += training.iloc[k][l]
+        c.append(b)
+        b=[]
+
+    y2 = np.array(c)
+    X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
+
+    return X_train, X_test, y_train, y_test
+
+def create_CNN(img_shape, df_model):
     '''
     Function that will create a neural network from training data
 
@@ -90,13 +151,10 @@ def create_CNN(X_train, y_train, X_test, y_test, img_shape, df_model):
     nb_epochs    : int, number of training iterations
     img_shape    : tuple, shape of images
     df_model:
-    window :
-    values : 
-    nb_batch_size : int, number of images used per sub-iteration. Limited by the computer memory. The default is 16.
-
+        
     Returns
     -------
-    
+    model: the compiled tensorflow model for landmarks prediction
 
     '''
     TF_FORCE_GPU_ALLOW_GROWTH=True
@@ -165,7 +223,6 @@ def create_CNN(X_train, y_train, X_test, y_test, img_shape, df_model):
     
     #model.summary()
     
-    # 
     model.compile(optimizer='Adam', loss='mse', metrics=['mae'])
     
     return model
@@ -180,24 +237,24 @@ def train_CNN(X_train, y_train, X_test, y_test, landmarks_detection_model, model
 
     Parameters
     ----------
-    X_train : TYPE
-        DESCRIPTION.
-    y_train : TYPE
-        DESCRIPTION.
-    X_test : TYPE
-        DESCRIPTION.
-    y_test : TYPE
-        DESCRIPTION.
+    X_train : 
+        Array of image training data
+    X_test  : 
+        Array of image testing data
+    y_train : 
+        Coordinates array of training data
+    y_test  : 
+        Coordinates array of testing data
     landmarks_detection_model: tensorflow model
-    
+        the compiled tensorflow model defined by create_CNN
     model_path : str
         path to save the current model
-    nb_epochs : TYPE
-        DESCRIPTION.
-    callbacks_list: list of callbacks objects
-    
-    nb_batch_size : TYPE, optional
-        The default is 16.
+    nb_epochs : int
+        number of training iterations.
+    callbacks_list: list
+        list of callbacks objects which defines which functions to run after each epoch
+    nb_batch_size : int, optional
+        Limited by computer memory. The default is 16.
 
     Returns
     -------
@@ -205,14 +262,11 @@ def train_CNN(X_train, y_train, X_test, y_test, landmarks_detection_model, model
 
     '''
     
-    ## Has to return the model?
-
-    checkpoint = ModelCheckpoint(model_path, monitor='loss', verbose=1, save_best_only=True, mode='min')
-    callbacks_list.append(checkpoint)
     landmarks_detection_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+    
     return 
     
-def predict_lm(df_files, df_model, values, window, shared):
+def predict_lm(df_files, df_model, model, project_folder, lmk_filename = 'predicted_landmarks_dataframe.csv'):
     '''
     Create a csv file with the predicted coordinates of landmarks on images using the CNN model.
     It also rescales the images to match the input size of the selected model and rescales back
@@ -224,11 +278,11 @@ def predict_lm(df_files, df_model, values, window, shared):
         DESCRIPTION.
     df_model : TYPE
         DESCRIPTION.
-    values : TYPE
+    model : TYPE
         DESCRIPTION.
-    window : TYPE
+    project_folder : TYPE
         DESCRIPTION.
-    shared : TYPE
+    lmk_filename : TYPE
         DESCRIPTION.
 
     Returns
@@ -236,62 +290,50 @@ def predict_lm(df_files, df_model, values, window, shared):
     None.
 
     '''
-    
-    window['-MODEL-RUN-STATE-'].update('Predicting...', text_color=('purple'))
-    window.Refresh()
 
-    # load the model and get width and height to which the images have to be rescaled:
-    try:
-        model = load_model(values['-MODEL-FOLDER2-'])
-        model_width = model.input_shape[2]
-        model_height = model.input_shape[1]
+    model_width = model.input_shape[2]
+    model_height = model.input_shape[1]
+
+    # get images 
+    images = []
+
+    # importing the images, converting to grayscale and resize
+    for i in range(len(df_files["full path"])):
+        image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
+        resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
+        images.append(resized)
+
+    image_width = image.shape[1]
+    image_height = image.shape[0]
     
-        # get images 
-        images = []
+    binning_w = image_width/model_width
+    binning_h = image_height/model_height
     
-        # importing the images, converting to grayscale and resize
-        for i in range(len(df_files["full path"])):
-            image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
-            resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
-            images.append(resized)
+    X = np.asarray(images).reshape(len(df_files["full path"].unique()), model_height, model_width, 1)
+    train_predicts = model.predict(X)
     
-        image_width = image.shape[0]
-        image_height = image.shape[1]
-        
-        binning_w = image_width/model_width
-        binning_h = image_height/model_height
-        
-        X = np.asarray(images).reshape(len(df_files["full path"].unique()), model_height, model_width, 1)
-        train_predicts = model.predict(X)
-        
-        # reshape the predictions in an nd array with indexes corresponding to: file, landmark, coordinate.
-        prediction = train_predicts[:,:,np.newaxis]
-        prediction = prediction.reshape((len(df_files["file name"]), len(df_model["target"]), 2))
-        
-        # rescale the predicted landmarks positions to the original size of the image:
-        prediction[:,:,0] = binning_h*prediction[:,:,0]
-        prediction[:,:,1] = binning_w*prediction[:,:,1]
-        
-        # TO DO: reshape the results in the usual format of the landmark dataframe
-        landmark_names = df_model['name'].values
-        df_pred_lmk    = df_files[['file name']].copy()
-        
-        for landmark in landmark_names:
-            df_pred_lmk[landmark] = np.nan
-        
-        for i in range(len(df_files["file name"])):
-            for j in range(len(landmark_names)):
-                lmk = landmark_names[j]
-                x = int(prediction[i,j,0])
-                y = int(prediction[i,j,1])
-                df_pred_lmk.loc[df_pred_lmk ["file name"]==df_files["file name"][i], lmk] = str([x,y])
-        
-        df_pred_lmk.to_csv(os.path.join(shared['proj_folder'], 'predicted_landmarks_dataframe.csv'))
+    # reshape the predictions in an nd array with indexes corresponding to: file, landmark, coordinate.
+    prediction = train_predicts[:,:,np.newaxis]
+    prediction = prediction.reshape((len(df_files["file name"]), len(df_model["target"]), 2))
     
-    except:
-        window["-PRINT-"].update("An error occured during landmarks prediction.")
-        
-    window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
-    window.Refresh()
+    # rescale the predicted landmarks positions to the original size of the image:
+    prediction[:,:,0] = binning_w*prediction[:,:,0]
+    prediction[:,:,1] = binning_h*prediction[:,:,1]
+    
+    # TO DO: reshape the results in the usual format of the landmark dataframe
+    landmark_names = df_model['name'].unique()
+    df_pred_lmk    = df_files[['file name']].copy()
+    
+    for landmark in landmark_names:
+        df_pred_lmk[landmark] = np.nan
+    
+    for i in range(len(df_files["file name"])):
+        for j in range(len(landmark_names)):
+            lmk = landmark_names[j]
+            x = int(prediction[i,j,0])
+            y = int(prediction[i,j,1])
+            df_pred_lmk.loc[df_pred_lmk ["file name"]==df_files["file name"][i], lmk] = str([x,y])
+    
+    df_pred_lmk.to_csv(os.path.join(project_folder, lmk_filename))
 
     return 
