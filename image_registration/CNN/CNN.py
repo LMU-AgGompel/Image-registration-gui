@@ -15,7 +15,7 @@ import numpy as np
 import itertools
 import pandas as pd
 
-def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, model_height, test_ratio=0.3, augmented_data_folder = None):
+def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, test_ratio=0.3, augmented_data_folder = None, normalization = True):
     '''
     Function to preprocess the data for the neural network
 
@@ -63,34 +63,35 @@ def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, mo
     # get images and their landmarks
     images_array = []
     all_landmarks_positions = []
+    n_files = len(training_data["full path"].unique())
     
     #importing the images and recoloring them as grayscale
     for image_path in training_data["full path"].unique():
-        image = color.rgb2gray(cv2.imread( image_path ))
-        img_shape = image.shape
-        image_height = image.shape[0]
-        image_width = image.shape[1]
-        binning_w = image_width/model_width
-        binning_h = image_height/model_height
-        image = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
-        images_array.append(image)
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
+        if normalization:
+            mean = np.mean(image[image>0])
+            image = image/mean
+        
+        images_array.append(image)
         landmark_positions = []
         
         for lmk in df_model["name"].unique():
             lmk_xy = ast.literal_eval(training_data.loc[training_data["full path"]==image_path, lmk].values[0])
-            lmk_xy = [lmk_xy[0]/binning_w, lmk_xy[1]/binning_h]
             landmark_positions += lmk_xy
         
         all_landmarks_positions.append(landmark_positions)
 
     # reshape the images to be compatible with the neural network:
-    X = np.asarray(images_array).reshape(len(training_data.index), model_height, model_width, 1)
-    y = np.array(all_landmarks_positions)
+    # reshape has to be done with height, width:
+ 
+    X = np.asarray(images_array, dtype = 'float').reshape(len(training_data["full path"].unique()), image.shape[0], image.shape[1], 1)
+    y = np.array(all_landmarks_positions, dtype = 'float')
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=42)
 
-    return X_train, X_test, y_train, y_test, augmented 
+    return X_train, X_test, y_train, y_test, image.shape   
 
 
 def create_CNN(img_shape, df_model):
@@ -99,14 +100,8 @@ def create_CNN(img_shape, df_model):
 
     Parameters
     ----------
-    X_train : Array of image training data
-    X_test  : Array of image testing data
-    y_train : Coordinates array of training data
-    y_test  : Coordinates array of testing data
-    model_folder : str, folder where to save the model
-    nb_epochs    : int, number of training iterations
-    img_shape    : tuple, shape of images
-    df_model:
+    img_shape : tuple, shape of images
+    df_model  : pandas dataframe, contains the reference positions of the landmarks
         
     Returns
     -------
