@@ -15,7 +15,7 @@ import numpy as np
 import itertools
 import pandas as pd
 
-def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, model_height, test_ratio=0.3):
+def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, model_height, test_ratio=0.3, augmented_data_folder = None):
     '''
     Function to preprocess the data for the neural network
 
@@ -37,14 +37,29 @@ def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, mo
     y_test  : y coordinates array of testing data
 
     '''
-    # TO DO: Check if augmented data folder exists and import data from there?
+    # Check if the augmented data folder exists and import data from there?
     
+    if augmented_data_folder:
+        try:
+            training_data = pd.read_csv(os.path.join(augmented_data_folder, "augmented_landmarks.csv"))
+            augmented_data_folder = os.path.join(augmented_data_folder, "")
+            training_data["full path"] = augmented_data_folder+training_data["file name"]
+            augmented = True
+        except:
+            training_data = df_landmarks.copy()
+            training_data = training_data.dropna()
+            training_data = training_data.reset_index()
+            training_data = pd.merge(training_data, df_files, on=["file name"])
+            augmented = False
+        
+    else:
     # Importing files
-    training_data = df_landmarks.copy()
-    training_data = training_data.dropna()
-    training_data = training_data.reset_index()
-    training_data = pd.merge(training_data, df_files, on=["file name"])
-
+        training_data = df_landmarks.copy()
+        training_data = training_data.dropna()
+        training_data = training_data.reset_index()
+        training_data = pd.merge(training_data, df_files, on=["file name"])
+        augmented = False
+        
     # get images and their landmarks
     images_array = []
     all_landmarks_positions = []
@@ -75,67 +90,8 @@ def data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_width, mo
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=42)
 
-    return X_train, X_test, y_train, y_test
+    return X_train, X_test, y_train, y_test, augmented 
 
-
-def initialize_CNN(shared, path, df_landmarks, df_files, df_model, img_shape, test_ratio=0.3):
-    '''
-    Function to initalize the data for the neural network
-    Parameters
-    ----------
-    shared : TYPE
-        DESCRIPTION.
-    df_landmarks : TYPE
-        DESCRIPTION.
-    df_files : TYPE
-        DESCRIPTION.
-    test_ratio : int, Ratio of data that will be used for testing the neural network. The default is 0.3.
-    Returns
-    -------
-    X_train : X coordinates array of training data
-    X_test : X coordinates array of testing data
-    y_train : y coordinates array of training data
-    y_test : y coordinates array of testing data
-    '''
-    # Importing files
-    training = df_landmarks.copy()
-    training = training.dropna()
-    training = training.reset_index()
-    training = pd.merge(training, df_files, on=["file name"])
-    
-    # get images and their landmarks
-    images_array = []
-
-    #importing the images and recoloring them as grayscale
-    for i in range(len(training["full path"])):
-        image = color.rgb2gray(cv2.imread(training["full path"][i]))
-        images_array.append(image)
-        
-    img_shape = image.shape()
-    # Removing images with empty values
-    training = training.drop(["file name"], axis=1)
-    training = training.drop(['index'],axis = 1)
-
-    X = np.asarray(images_array).reshape(len(training.index),img_shape[1],img_shape[0],1)
-
-    for i in range(len(training.index)):
-        for j in range(0,len(training.columns)):
-            if type(training.iloc[i][j]) == str:
-                training.iloc[i][j] = ast.literal_eval(training.iloc[i][j])
-                training.iloc[i][j+1] = ast.literal_eval(training.iloc[i][j+1])
-    
-    b=[]
-    c=[]
-    for k in range(len(training.index)):
-        for l in range(0,len(training.columns)):
-            b += training.iloc[k][l]
-        c.append(b)
-        b=[]
-
-    y2 = np.array(c)
-    X_train, X_test, y_train, y_test = train_test_split(X, y2, test_size=test_ratio, random_state=42)
-
-    return X_train, X_test, y_train, y_test
 
 def create_CNN(img_shape, df_model):
     '''

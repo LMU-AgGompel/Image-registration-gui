@@ -861,14 +861,14 @@ class window_callback(Callback):
         self.window.Refresh()
         
         if self.epochs_left%self.save_freq == 0:
-            filepath = os.path.join(self.folder, self.model_name)
+            filepath = os.path.join(self.folder, self.model_name)+".h5"
             self.model.save(filepath, overwrite=True)
             
         
     def on_train_end(self, logs={}):
         self.window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
         self.window.Refresh()
-        filepath = os.path.join(self.folder, self.model_name)
+        filepath = os.path.join(self.folder, self.model_name)+".h5"
         self.model.save(filepath, overwrite=True)
         
 def CNN_train(window, X_train, y_train, X_test, y_test, shared, values):
@@ -945,7 +945,7 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
     return
     
     
-def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentation):
+def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentation, binning = 15):
     """
 
     Parameters
@@ -986,7 +986,25 @@ def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentat
     for file_name in df_landmarks_augmented["file name"].unique():
         
         img = Image.open( df_files.loc[df_files["file name"] == file_name, "full path"].values[0] )
+        
+        if binning:
+            img = np.asarray(img)
+            width = int(img.shape[1] / binning)
+            height = int(img.shape[0] / binning)
+            dim = (width, height)
+            img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+            img = Image.fromarray(img)
+            
         img.save( os.path.join(aug_data_folder, file_name) )
+        
+        if binning:
+            for lmk in df_model["name"].unique():
+                x,y = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk].values[0])
+                x = int(x/binning)
+                y = int(y/binning)
+                df_landmarks_augmented.loc[df_landmarks_augmented["file name"]==file_name, lmk] = str([x,y])
+                df_landmarks.loc[df_landmarks["file name"]==file_name, lmk] = str([x,y])
+
         
         for k in range(n_data_augmentation):
             
@@ -1002,8 +1020,11 @@ def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentat
             ys = []
             
             rad_angle = angle*math.pi/180
+            
             for lmk in df_model["name"].unique():
+
                 x,y = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk].values[0])
+
                 qx = round(ox + math.cos(rad_angle) * (x - ox) - math.sin(rad_angle) * (y - oy))
                 qy = round(oy + math.sin(rad_angle) * (x - ox) + math.cos(rad_angle) * (y - oy))
                 xs.append(qx)

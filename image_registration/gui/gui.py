@@ -160,25 +160,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared['curr_image'] = np.uint8(np.asarray(shared['raw_image'])*scaling)
                 shared['curr_image'] = Image.fromarray(shared['curr_image'])
                 update_image(shared['curr_image'], main_window, graph_canvas_width)
-          
-        if event == '-DATA-AUG-':
-            data_augmentation(shared, df_landmarks, df_files, df_model, values["-DATA-NUM-"])
-        
-        if event == '-CNN-CREATE-':
-            model_input_shape = (512, 512)
-            shared['CNN_model'] = CNN_create(main_window, model_input_shape, df_model)
 
-        if event == '-CNN-PATH-':
-            CNN_load(main_window, values, shared)
-
-        if event == '-CNN-TRAIN-':
-            model_input_shape = (512, 512)
-            X_train, X_test, y_train, y_test = image_registration.data_preprocessing_for_CNN(df_landmarks, df_files, df_model, model_input_shape[0], model_input_shape[1])
-            CNN_train(main_window, X_train, y_train, X_test, y_test, shared, values)
-
-        if event == 'LM-DETECT':
-            CNN_predict_landmarks(df_files, df_model, main_window, shared, values)
-        
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current
             # project.
@@ -193,7 +175,37 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 main_window["-PRINT-"].update("** Project saved at "+current_time+" **")
             except:
                 pass
+
+        # --------------------- events related to the CNN ---------------------
+                  
+        if event == '-DATA-AUG-':
+            data_augmentation(shared, df_landmarks, df_files, df_model, values["-DATA-NUM-"])
         
+        if event == '-CNN-CREATE-':
+            model_input_shape = (512, 512)
+            shared['CNN_model'] = CNN_create(main_window, model_input_shape, df_model)
+
+        if event == '-CNN-PATH-':
+            CNN_load(main_window, values, shared)
+
+        if event == '-CNN-TRAIN-':
+            model_input_shape = (512, 512)
+            aug_data_folder = os.path.join(shared['proj_folder'], "augmented_data")
+            
+            X_train, X_test, y_train, y_test, augmented = image_registration.data_preprocessing_for_CNN(df_landmarks,
+            df_files, df_model, model_input_shape[0], model_input_shape[1], augmented_data_folder = aug_data_folder)
+            
+            if augmented:
+                main_window["-PRINT-"].update("** The CNN training is performed on the augmented dataset **")
+            else:
+                main_window["-PRINT-"].update("** The CNN training is performed on the original dataset **")
+                
+            CNN_train(main_window, X_train, y_train, X_test, y_test, shared, values)
+
+        if event == 'LM-DETECT':
+            CNN_predict_landmarks(df_files, df_model, main_window, shared, values)
+        
+
         # -------------------- keyboard shortcuts: ----------------------------
 
         if ("Control" in previous_event and "a" in event):
