@@ -111,14 +111,17 @@ def create_CNN(img_shape, df_model):
     Returns
     -------
     model: the compiled tensorflow model for landmarks prediction
-
-    '''
-    TF_FORCE_GPU_ALLOW_GROWTH=True
     
+    '''
+
     n_landmarks = len(df_model["name"].unique())
+    input_shape = (img_shape[0],img_shape[1],1)
+    
+    TF_FORCE_GPU_ALLOW_GROWTH=True
 
     model = Sequential()
-    model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape = img_shape[::-1] + (1,) ))
+
+    model.add(Convolution2D(32, (3,3), padding='same', use_bias=False, input_shape=input_shape))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
 
@@ -145,20 +148,21 @@ def create_CNN(img_shape, df_model):
     model.add(BatchNormalization())
     model.add(MaxPool2D(pool_size=(2, 2)))
 
-    model.add(Convolution2D(128, (3,3), padding='same', use_bias=False))
+    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
+    # model.add(BatchNormalization())
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
 
-    model.add(Convolution2D(128, (3,3), padding='same', use_bias=False))
+    model.add(Convolution2D(128, (3,3),padding='same', use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
     model.add(MaxPool2D(pool_size=(2, 2)))
 
-    model.add(Convolution2D(256, (3,3), padding='same',use_bias=False))
+    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
 
-    model.add(Convolution2D(256, (3,3), padding='same',use_bias=False))
+    model.add(Convolution2D(256, (3,3),padding='same',use_bias=False))
     model.add(LeakyReLU(alpha = 0.1))
     model.add(BatchNormalization())
     model.add(MaxPool2D(pool_size=(2, 2)))
@@ -174,12 +178,13 @@ def create_CNN(img_shape, df_model):
 
     model.add(Flatten())
     model.add(Dense(512,activation='relu'))
-    model.add(Dropout(0.1))
+    #model.add(Dropout(0.1))
     model.add(Dense(2*n_landmarks))
-    
-    #model.summary()
-    
-    model.compile(optimizer='Adam', loss='mse', metrics=['mae'])
+    model.summary()
+
+    model.compile(optimizer='Adam',
+                  loss='mse',
+                  metrics=['mae'])
     
     return model
 
