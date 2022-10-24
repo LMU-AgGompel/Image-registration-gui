@@ -218,11 +218,10 @@ def train_CNN(X_train, y_train, X_test, y_test, landmarks_detection_model, model
 
     '''
     
-    landmarks_detection_model.fit(X_train, y_train, epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
-    
+    landmarks_detection_model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
     return 
     
-def predict_lm(df_files, df_model, model, project_folder, lmk_filename = 'predicted_landmarks_dataframe.csv'):
+def predict_lm(df_files, df_model, model, project_folder, normalization=True, lmk_filename = 'predicted_landmarks_dataframe.csv'):
     '''
     Create a csv file with the predicted coordinates of landmarks on images using the CNN model.
     It also rescales the images to match the input size of the selected model and rescales back
@@ -247,15 +246,17 @@ def predict_lm(df_files, df_model, model, project_folder, lmk_filename = 'predic
 
     '''
 
+    # get images 
+    images = []
     model_width = model.input_shape[2]
     model_height = model.input_shape[1]
 
-    # get images 
-    images = []
-
     # importing the images, converting to grayscale and resize
-    for i in range(len(df_files["full path"])):
-        image = color.rgb2gray(cv2.imread(df_files["full path"][i]))
+    for image_name in df_files["full path"].unique():
+        image = cv2.imread(image_name)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if normalization:
+            image = image / np.mean(image[image>0])
         resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
         images.append(resized)
 
@@ -292,4 +293,4 @@ def predict_lm(df_files, df_model, model, project_folder, lmk_filename = 'predic
     
     df_pred_lmk.to_csv(os.path.join(project_folder, lmk_filename))
 
-    return 
+    return
