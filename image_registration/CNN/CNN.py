@@ -20,6 +20,7 @@ import random as rd
 from scipy import ndimage
 import glob
 import threading
+import copy
 
 def image_downsample(img, binning, normalize=True):
     """
@@ -705,45 +706,56 @@ class window_callback(Callback):
         self.folder = folder
         self.save_freq = save_freq
         self.model_name = model_name
+        self.filepath = os.path.join(self.folder, self.model_name)+".h5"
         
     def on_train_begin(self, logs={}):
         self.metrics = {}
+        self.previous_metrics = {}
+        self.current_epoch = 0
         for metric in logs:
             self.metrics[metric] = []
+            self.previous_metrics[metric] = []
         self.window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
         self.window.Refresh()
 
     def on_epoch_end(self, epoch, logs={}):
         # Storing metrics
+        self.previous_metrics = copy.deepcopy(self.metrics)
+        
         for metric in logs:
-            if metric in self.metrics:
-                self.metrics[metric].append(logs.get(metric))
-            else:
-                self.metrics[metric] = [logs.get(metric)]
+            self.metrics[metric] = logs.get(metric)
 
         self.window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(self.epochs_left))
         self.epochs_left = self.epochs_left-1
+        self.current_epoch = self.current_epoch+1
+        
         if 'mae' in self.metrics:
-            self.window['-CURRENT-MAE-'].update('Current training precision (mae): ' + str(round(min(self.metrics['mae']),2)))    
+            self.window['-CURRENT-MAE-'].update('Current training precision (mae): ' + str(round(self.metrics['mae'],2)))    
         elif 'mean_absolute_error' in self.metrics:
-            self.window['-CURRENT-MAE-'].update('Current training precision (mae): ' + str(round(min(self.metrics['mean_absolute_error']),2)))
+            self.window['-CURRENT-MAE-'].update('Current training precision (mae): ' + str(round(self.metrics['mean_absolute_error'],2)))
         else:
-            self.window['-CURRENT-MAE-'].update('Current training precision (mse): ' + str(round(min(self.metrics['loss']),2)))
+            self.window['-CURRENT-MAE-'].update('Current training precision (mse): ' + str(round(self.metrics['loss'],2)))
 
         if 'val_mae' in self.metrics:
-            self.window['-CURRENT-VALMAE-'].update('Current validation precision (val_mae): ' + str(round(min(self.metrics['val_mae']),2)))    
-        elif 'mean_absolute_error' in self.metrics:
-            self.window['-CURRENT-VALMAE-'].update('Current validation precision (val_mae): ' + str(round(min(self.metrics['val_mean_absolute_error']),2)))
+            self.window['-CURRENT-VALMAE-'].update('Current validation precision (val_mae): ' + str(round(self.metrics['val_mae'],2)))    
+        elif 'val_mean_absolute_error' in self.metrics:
+            self.window['-CURRENT-VALMAE-'].update('Current validation precision (val_mae): ' + str(round(self.metrics['val_mean_absolute_error'],2)))
         else:
-            self.window['-CURRENT-VALMAE-'].update('Current validation precision (val_mse): ' + str(round(min(self.metrics['val_loss']),2)))
+            self.window['-CURRENT-VALMAE-'].update('Current validation precision (val_mse): ' + str(round(self.metrics['val_loss'],2)))
 
         self.window.Refresh()
         
-        if self.epochs_left%self.save_freq == 0:
-            filepath = os.path.join(self.folder, self.model_name)+".h5"
-            self.model.save(filepath, overwrite=True)
+        # save the model at the end of the epoch only if the validation loss is reduced:
+        if self.current_epoch > 1:
+            self.window["-PRINT-"].update(str(self.current_epoch)+" || curr val_loss: "+str(self.metrics['val_loss'])+" prev_val_loss:"+str(self.previous_metrics['val_loss']))
+            if self.metrics['val_loss'] < self.previous_metrics['val_loss']:
+                self.model_to_save = copy.deepcopy(self.model)
+                self.window["-PRINT-"].update("The validation loss has improved! model is kept for saving")
+            if self.epochs_left % self.save_freq == 0:
+                self.model_to_save.save(self.filepath, overwrite=True)
+        else:    
+            self.model_to_save = copy.deepcopy(self.model)
             
-        
     def on_train_end(self, logs={}):
         self.window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
         self.window.Refresh()

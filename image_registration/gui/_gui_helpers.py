@@ -825,7 +825,7 @@ def CNN_train(window, train_folder, val_folder, df_model, shared, values):
     '''
     if shared['CNN_model']:
         nb_epochs =  values['-EPOCHS-']
-        model_name = values['-CNN-NAME-']+".h5"
+        model_name = values['-CNN-NAME-']
         proj_folder =  shared['proj_folder']
         CNN_model_object =  shared['CNN_model']
         image_registration.train_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
