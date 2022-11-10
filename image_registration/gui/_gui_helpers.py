@@ -14,9 +14,7 @@ from ..registration.TPS import TPSwarping
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
 import random as rd
-import threading
 import image_registration
-from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.models import load_model as Keras_load_model
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
@@ -820,87 +818,18 @@ def CNN_load(window, values, shared):
     window['-CNN-NAME-'].update(model_name)
     return
         
-
-class window_callback(Callback):
-    """
-    Customized Callback class to update the gui window during training and save
-    the modele every n epochs.
-    """
-    def __init__(self, window, nb_epochs, folder, save_freq=10, model_name = "landmarks_detection_model.h5"):
-        super(window_callback, self).__init__()
-        self.window = window
-        self.epochs_left = nb_epochs
-        self.folder = folder
-        self.save_freq = save_freq
-        self.model_name = model_name
         
-    def on_train_begin(self, logs={}):
-        self.metrics = {}
-        for metric in logs:
-            self.metrics[metric] = []
-        self.window['-MODEL-RUN-STATE-'].update('Yes', text_color=('lime'))
-        self.window.Refresh()
-
-    def on_epoch_end(self, epoch, logs={}):
-        # Storing metrics
-        for metric in logs:
-            if metric in self.metrics:
-                self.metrics[metric].append(logs.get(metric))
-            else:
-                self.metrics[metric] = [logs.get(metric)]
-
-        self.window['-EPOCHS-COUNT-'].update('Epochs left : ' + str(self.epochs_left))
-        self.epochs_left = self.epochs_left-1
-        if 'mae' in self.metrics:
-            self.window['-CURRENT-MAE-'].update('Current precision (mae): ' + str(round(min(self.metrics['mae']),2)))    
-        elif 'mean_absolute_error' in self.metrics:
-            self.window['-CURRENT-MAE-'].update('Current precision (mae): ' + str(round(min(self.metrics['mean_absolute_error']),2)))
-        else:
-            self.window['-CURRENT-MAE-'].update('Current precision (mse): ' + str(round(min(self.metrics['loss']),2)))
-
-        self.window.Refresh()
-        
-        if self.epochs_left%self.save_freq == 0:
-            filepath = os.path.join(self.folder, self.model_name)+".h5"
-            self.model.save(filepath, overwrite=True)
-            
-        
-    def on_train_end(self, logs={}):
-        self.window['-MODEL-RUN-STATE-'].update('No', text_color=('red'))
-        self.window.Refresh()
-        filepath = os.path.join(self.folder, self.model_name)+".h5"
-        self.model.save(filepath, overwrite=True)
-        
-def CNN_train(window, X_train, y_train, X_test, y_test, shared, values):
+def CNN_train(window, train_folder, val_folder, df_model, shared, values):
     '''
-    Continue the training of a model calling the train_CNN function and provide
-    an interface to the gui window through a custom Callback class
-
-    Parameters
-    ----------
-    window : TYPE
-        DESCRIPTION.
-    X_train : Array of iamge training data
-    X_test : Array of image testing data
-    y_train : Coordinates array of training data
-    y_test : Coordinates array of testing data
-    shared : TYPE
-        DESCRIPTION.
-    values : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    None.
 
     '''
     if shared['CNN_model']:
         nb_epochs =  values['-EPOCHS-']
-        callbacks_list = [window_callback(window, nb_epochs, shared['proj_folder'], model_name = values['-CNN-NAME-'])]
-        #image_registration.train_CNN(X_train, y_train, X_test, y_test, shared['CNN_model'], values["-MODEL-FOLDER-"], nb_epochs, callbacks_list)
-        threading.Thread(target = image_registration.train_CNN,
-                         args = (X_train, y_train, X_test, y_test, shared['CNN_model'], shared['proj_folder'], nb_epochs, callbacks_list), 
-                         daemon=True).start()
+        model_name = values['-CNN-NAME-']+".h5"
+        proj_folder =  shared['proj_folder']
+        CNN_model_object =  shared['CNN_model']
+        image_registration.train_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
+
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
     
@@ -942,97 +871,6 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
 
-    return
-    
-    
-def data_augmentation(shared, df_landmarks, df_files, df_model, n_data_augmentation, binning = 15):
-    """
-
-    Parameters
-    ----------
-    shared : TYPE
-        DESCRIPTION.
-    df_landmarks : TYPE
-        DESCRIPTION.
-    df_files : TYPE
-        DESCRIPTION.
-    df_model : TYPE
-        DESCRIPTION.
-    n_data_augmentation : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    None.
-
-    """
-    
-    aug_data_folder = os.path.join(shared['proj_folder'], "augmented_data")
-    
-    # Creating the folder for the images + csv file
-    try : 
-        os.mkdir(aug_data_folder) 
-    except : 
-        print('folder already exist')
-        files = glob.glob(os.path.join(aug_data_folder,"*"))
-        for f in files:
-            os.remove(f)
-    
-    # loop through all the images and randomly rotate images and their corresponding landmarks:
-    df_landmarks_augmented = df_landmarks.copy()
-    df_landmarks_augmented = df_landmarks_augmented.dropna()
-    df_landmarks_augmented = df_landmarks_augmented.reset_index()
-    
-    for file_name in df_landmarks_augmented["file name"].unique():
-        
-        img = Image.open( df_files.loc[df_files["file name"] == file_name, "full path"].values[0] )
-        
-        if binning:
-            img = np.asarray(img)
-            width = int(img.shape[1] / binning)
-            height = int(img.shape[0] / binning)
-            dim = (width, height)
-            img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-            img = Image.fromarray(img)
-            
-        img.save( os.path.join(aug_data_folder, file_name) )
-        
-        if binning:
-            for lmk in df_model["name"].unique():
-                x,y = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk].values[0])
-                x = int(x/binning)
-                y = int(y/binning)
-                df_landmarks_augmented.loc[df_landmarks_augmented["file name"]==file_name, lmk] = str([x,y])
-                df_landmarks.loc[df_landmarks["file name"]==file_name, lmk] = str([x,y])
-
-        
-        for k in range(n_data_augmentation):
-            
-            angle  = rd.randint(0, 360)
-            ox, oy = img.size[0]/2, img.size[1]/2
-            new_file_name = str(k)+"_"+file_name
-    
-            rotated_image = img.rotate(-angle)
-            rotated_image.save(os.path.join(aug_data_folder, new_file_name))
-            
-            df_landmarks_augmented.loc[len(df_landmarks_augmented.index), "file name"] = new_file_name
-            xs = []
-            ys = []
-            
-            rad_angle = angle*math.pi/180
-            
-            for lmk in df_model["name"].unique():
-
-                x,y = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk].values[0])
-
-                qx = round(ox + math.cos(rad_angle) * (x - ox) - math.sin(rad_angle) * (y - oy))
-                qy = round(oy + math.sin(rad_angle) * (x - ox) + math.cos(rad_angle) * (y - oy))
-                xs.append(qx)
-                ys.append(qy)
-                df_landmarks_augmented.loc[df_landmarks_augmented["file name"]==new_file_name, lmk] = str([qx,qy])
-
-    df_landmarks_augmented.to_csv(os.path.join(aug_data_folder, "augmented_landmarks.csv"))
-    
     return
 
 
@@ -1287,24 +1125,27 @@ def make_main_window(size, graph_canvas_width):
                         sg.Button("Add images to project", size = (20,1), key="-NEW-IMAGES-"),
                         sg.Button("Merge 2 projects", size = (15,1), key="-MERGE-PROJECTS-")]]
     
-    CNN_creation_frame = [[sg.Text('Data augmentation : ', size=(20, 1))],
-                         [sg.Button("Augment", size=(15,1), key='-DATA-AUG-'),
-                          sg.Spin([s for s in range(1,366)],initial_value=1, size=10, enable_events=True, key = "-DATA-NUM-")],
+    CNN_creation_frame = [
+                         [sg.Text('Training data augmentation: ', size=(30,1)),
+                          sg.Spin([s for s in range(1,1000)],initial_value=16, size=10, enable_events=True, key = "-CNN-AUGM-")],
+                         [sg.Text('Image binning: ', size=(30,1)),
+                          sg.Spin([s for s in range(1,100)],initial_value=10, size=10, enable_events=True, key = "-CNN-BIN-")],
                          [sg.Text('Create a new CNN : ' , size=(20, 1))],
                          [sg.Button("Create", size=(15,1), key='-CNN-CREATE-')],
                          [sg.Text('Load a pretrained CNN : ' , size=(20, 1))],
                          [sg.Input(size=(15,1), enable_events=True, key='-CNN-PATH-'),
-                         sg.FileBrowse("Model file",size=(15,1))], 
+                         sg.FileBrowse("Select file",size=(15,1))], 
                          ]
     
     CNN_training_frame = [
                           [sg.Text('Number of epochs : ', size=(20, 1)),
-                          sg.Spin([s for s in range(1,1000000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
+                          sg.Spin([s for s in range(1,1000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
                           [sg.Text('Filename of trained CNN : ' , size=(20, 1)),
                            sg.Input(size=(15,1), enable_events=True, key='-CNN-NAME-')],
                           [sg.Button("Train current model", size=(15,1), key='-CNN-TRAIN-')],
                           [sg.Text('Epochs left : ', size=(17, 1), key = '-EPOCHS-COUNT-')],
-                          [sg.Text('Current precision : ', size=(28, 1), key = '-CURRENT-MAE-')],
+                          [sg.Text('Current training precision : ', size=(40, 1), key = '-CURRENT-MAE-')],
+                          [sg.Text('Current validation precision : ', size=(40, 1), key = '-CURRENT-VALMAE-')],
                           [sg.Text('Currently running :', size=(15, 1)), 
                           sg.Text('No', text_color=('red'), size= (30,1), key = "-MODEL-RUN-STATE-")]
                          ]
@@ -1312,7 +1153,7 @@ def make_main_window(size, graph_canvas_width):
     predictions_frame = [
                     [sg.Text('')],
                     [sg.Input(size=(20,1), enable_events=True, key='-MODEL-FOLDER2-'),
-                     sg.FileBrowse("Model file",size=(12,1))],
+                     sg.FileBrowse("Select file",size=(12,1))],
                     [sg.Button('Landmarks detection', key ='LM-DETECT')]
                     ]
     

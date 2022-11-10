@@ -43,7 +43,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
               'list_landmarks': None, 'drawing_line': False, 'pt_size': 10, 'normalize': True, 
-              'graph_width': graph_canvas_width, 'CNN_model': None}
+              'graph_width': graph_canvas_width, 'CNN_binning':10, 'CNN_augmentation': 16, 'CNN_model': None}
 
     df_files = None
     df_landmarks = None
@@ -177,30 +177,27 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 pass
 
         # --------------------- events related to the CNN ---------------------
-                  
-        if event == '-DATA-AUG-':
-            data_augmentation(shared, df_landmarks, df_files, df_model, values["-DATA-NUM-"])
-        
+
         if event == '-CNN-CREATE-':
-            model_input_shape = (512, 512)
-            shared['CNN_model'] = CNN_create(main_window, model_input_shape, df_model)
+            binning =  values['-CNN-BIN-']
+            image_shape = image_registration.check_image_shape(df_files)
+            if image_shape:
+                model_input_shape = [int(image_shape[0]/binning), int(image_shape[1]/binning)]
+                shared['CNN_model'] = CNN_create(main_window, model_input_shape, df_model)
 
         if event == '-CNN-PATH-':
             CNN_load(main_window, values, shared)
 
         if event == '-CNN-TRAIN-':
-            model_input_shape = (512, 512)
-            aug_data_folder = os.path.join(shared['proj_folder'], "augmented_data")
             
-            X_train, X_test, y_train, y_test, augmented = image_registration.data_preprocessing_for_CNN(df_landmarks,
-            df_files, df_model, model_input_shape[0], model_input_shape[1], augmented_data_folder = aug_data_folder)
+            train_folder = os.path.join(shared['proj_folder'], "training_data")
+            val_folder   = os.path.join(shared['proj_folder'], "validation_data")
             
-            if augmented:
-                main_window["-PRINT-"].update("** The CNN training is performed on the augmented dataset **")
-            else:
-                main_window["-PRINT-"].update("** The CNN training is performed on the original dataset **")
-                
-            CNN_train(main_window, X_train, y_train, X_test, y_test, shared, values)
+            n_augment = values['-CNN-AUGM-']
+            binning =  values['-CNN-BIN-']
+            
+            image_registration.training_data_preprocessing(train_folder, val_folder, df_landmarks, df_files, df_model, n_augment, binning, test_size=0.2, normalization=True)
+            CNN_train(main_window, train_folder, val_folder, df_model, shared, values)
 
         if event == 'LM-DETECT':
             CNN_predict_landmarks(df_files, df_model, main_window, shared, values)

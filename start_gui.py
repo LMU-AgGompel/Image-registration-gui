@@ -8,5 +8,5 @@ Created on Fri Mar 25 18:13:00 2022
 
 import image_registration
 
-image_registration.gui.start(main_window_size = (1700,1200), graph_canvas_width = 900)
+image_registration.gui.start(main_window_size = (1700,1200), graph_canvas_width = 700)
 
