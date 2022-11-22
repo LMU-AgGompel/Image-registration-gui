@@ -820,15 +820,25 @@ def CNN_load(window, values, shared):
         
         
 def CNN_train(window, train_folder, val_folder, df_model, shared, values):
-    '''
-
-    '''
     if shared['CNN_model']:
         nb_epochs =  values['-EPOCHS-']
         model_name = values['-CNN-NAME-']
         proj_folder =  shared['proj_folder']
         CNN_model_object =  shared['CNN_model']
         image_registration.train_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
+
+    else:
+        window["-PRINT-"].update("** No model available, please create or load a neural network model **")
+    
+    return
+
+def CNN_fine_tune(window, train_folder, val_folder, df_model, shared, values):
+    if shared['CNN_model']:
+        nb_epochs =  values['-EPOCHS-']
+        model_name = values['-CNN-NAME-']
+        proj_folder =  shared['proj_folder']
+        CNN_model_object =  shared['CNN_model']
+        image_registration.fine_tune_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
 
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
@@ -1142,7 +1152,9 @@ def make_main_window(size, graph_canvas_width):
                           sg.Spin([s for s in range(1,1000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
                           [sg.Text('Filename of trained CNN : ' , size=(20, 1)),
                            sg.Input(size=(15,1), enable_events=True, key='-CNN-NAME-')],
-                          [sg.Button("Train current model", size=(15,1), key='-CNN-TRAIN-')],
+                          [sg.Button("Retrain current model", size=(25,1), key='-CNN-TRAIN-')],
+                          [sg.Button("Continue training current model", size=(25,1), key='-CNN-CONTINUE-TRAIN-')],
+                          [sg.Button("Fine tuning current model", size=(25,1), key='-CNN-FINE-TUNE-')],
                           [sg.Text('Epochs left : ', size=(17, 1), key = '-EPOCHS-COUNT-')],
                           [sg.Text('Current training precision : ', size=(40, 1), key = '-CURRENT-MAE-')],
                           [sg.Text('Current validation precision : ', size=(40, 1), key = '-CURRENT-VALMAE-')],

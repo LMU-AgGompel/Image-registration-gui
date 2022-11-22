@@ -11,6 +11,7 @@ from tensorflow.keras.layers import Dense, Flatten, BatchNormalization, Dropout,
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.models import load_model
+from tensorflow.keras.optimizers import Adam
 import os,cv2,ast
 import numpy as np
 import itertools
@@ -617,7 +618,33 @@ def train_CNN(X_train, y_train, X_test, y_test, landmarks_detection_model, model
     '''
     
     landmarks_detection_model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
-    return 
+    
+    return
+
+def fine_tune_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window):
+    
+    X_train, X_test, y_train, y_test = import_train_val_data(train_folder, val_folder, df_model)
+    
+    callbacks_list = [window_callback(window, nb_epochs, proj_folder, model_name = model_name)]
+    
+    threading.Thread(target = fine_tune_CNN,
+                     args = (X_train, y_train, X_test, y_test, CNN_model_object, 
+                             proj_folder, nb_epochs, callbacks_list), 
+                     daemon=True).start()  
+    return
+
+def fine_tune_CNN(X_train, y_train, X_test, y_test, CNN_model, model_path, nb_epochs, callbacks_list = [], nb_batch_size= 16):
+    
+    # Make BatchNormalization layers non trainable
+    for layer in CNN_model.layers:
+        if isinstance(layer, BatchNormalization):
+            layer.trainable = False
+            
+    # Recompile the model and use a smaller step for training:
+    CNN_model.compile(optimizer = Adam(1e-5), loss ='mse', metrics = ['mae'])
+    CNN_model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=nb_epochs, batch_size = nb_batch_size, callbacks=callbacks_list)
+    
+    return
     
 def predict_lm(df_files, df_model, model, project_folder, normalization=True, lmk_filename = 'predicted_landmarks_dataframe.csv'):
     '''
@@ -721,7 +748,6 @@ class window_callback(Callback):
     def on_epoch_end(self, epoch, logs={}):
         # Storing metrics
         self.previous_metrics = copy.deepcopy(self.metrics)
-        
         for metric in logs:
             self.metrics[metric] = logs.get(metric)
 
@@ -745,12 +771,11 @@ class window_callback(Callback):
 
         self.window.Refresh()
         
-        # save the model at the end of the epoch only if the validation loss is reduced:
+        # store the model at the end of the epoch only if the validation loss is reduced:
         if self.current_epoch > 1:
-            self.window["-PRINT-"].update(str(self.current_epoch)+" || curr val_loss: "+str(self.metrics['val_loss'])+" prev_val_loss:"+str(self.previous_metrics['val_loss']))
             if self.metrics['val_loss'] < self.previous_metrics['val_loss']:
                 self.model_to_save = copy.deepcopy(self.model)
-                self.window["-PRINT-"].update("The validation loss has improved! model is kept for saving")
+            # save the best model of the last save_freq epochs
             if self.epochs_left % self.save_freq == 0:
                 self.model_to_save.save(self.filepath, overwrite=True)
         else:    

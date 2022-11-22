@@ -199,6 +199,30 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             image_registration.training_data_preprocessing(train_folder, val_folder, df_landmarks, df_files, df_model, n_augment, binning, test_size=0.2, normalization=True)
             CNN_train(main_window, train_folder, val_folder, df_model, shared, values)
 
+        if event == '-CNN-CONTINUE-TRAIN-':
+            
+            train_folder = os.path.join(shared['proj_folder'], "training_data")
+            val_folder   = os.path.join(shared['proj_folder'], "validation_data")
+            
+            if os.path.isdir(train_folder) & os.path.isdir(val_folder):
+                if (not os.listdir(train_folder)) & (not os.listdir(val_folder)):
+                    CNN_train(main_window, train_folder, val_folder, df_model, shared, values)
+            else:
+                main_window["-PRINT-"].update("** No training and validation data to continue the training. \n Consider training from scratch**")
+            
+        if event == '-CNN-FINE-TUNE-':
+            
+            train_folder = os.path.join(shared['proj_folder'], "training_data")
+            val_folder   = os.path.join(shared['proj_folder'], "validation_data")
+            
+            n_augment = values['-CNN-AUGM-']
+            binning =  values['-CNN-BIN-']
+            
+            image_registration.training_data_preprocessing(train_folder, val_folder, df_landmarks, df_files, df_model, n_augment, binning, test_size=0.2, normalization=True)
+            CNN_fine_tune(main_window, train_folder, val_folder, df_model, shared, values)
+           
+
+
         if event == 'LM-DETECT':
             CNN_predict_landmarks(df_files, df_model, main_window, shared, values)
         
