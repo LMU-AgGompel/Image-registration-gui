@@ -646,6 +646,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
             # Getting snake landmarks for reference
             if df_snake is not None:
                 df_snake["N_points"] = 0
+                ref_image = cv2.imread(os.path.join(shared['proj_folder'], ref_image_name),  cv2.IMREAD_ANYDEPTH)
                 for index, row in df_snake.iterrows():
                     # get the positions of the two landmarks in target image:
                     lmk1_name, lmk2_name  = row["Lmk1"], row["Lmk2"]
@@ -654,7 +655,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                     alpha = row["alpha"]
                     smoothing = row["smoothing"]
                     w_line = row["w_line"]
-                    ref_image = cv2.imread(os.path.join(shared['proj_folder'], ref_image_name),  cv2.IMREAD_ANYDEPTH)
+                    
                     snk = snake_contour(ref_image, lmk1_pos[1], lmk1_pos[0], lmk2_pos[1], lmk2_pos[0], alpha, smoothing, w_line)
                     df_snake.loc[index,"N_points"] = len(snk)            
                     c_dst.extend(snk[1:-1].tolist())
