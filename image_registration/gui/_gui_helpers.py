@@ -1177,7 +1177,7 @@ def make_main_window(size, graph_canvas_width):
     
     # --------------------------------- Define Layout ---------------------------------
 
-    selection_frame = [[sg.Text('Open existing project: ', size=(20, 1)), 
+    selection_frame = [[sg.Text('Open existing project: ', size=(30, 1)), 
                         sg.Input(size=(20,1), enable_events=True, key='-PROJECT-FOLDER-'),
                         sg.FolderBrowse(size=(15,1)),
                         sg.Button("Load selected project", size=(20,1), key='-LOAD-PROJECT-'),
@@ -1190,7 +1190,8 @@ def make_main_window(size, graph_canvas_width):
                           sg.Spin([s for s in range(1,1000)],initial_value=16, size=10, enable_events=True, key = "-CNN-AUGM-")],
                          [sg.Text('Image binning: ', size=(30,1)),
                           sg.Spin([s for s in range(1,100)],initial_value=10, size=10, enable_events=True, key = "-CNN-BIN-")],
-                         [sg.Text('Create a new CNN : ' , size=(20, 1))],
+                         [sg.Text('' , size=(50, 1))],
+                         [sg.Text('Create a new CNN : ' , size=(35, 1))],
                          [sg.Button("Create", size=(15,1), key='-CNN-CREATE-')],
                          [sg.Text('Load a pretrained CNN : ' , size=(20, 1))],
                          [sg.Input(size=(15,1), enable_events=True, key='-CNN-PATH-'),
@@ -1200,23 +1201,22 @@ def make_main_window(size, graph_canvas_width):
     CNN_training_frame = [
                           [sg.Text('Number of epochs : ', size=(20, 1)),
                           sg.Spin([s for s in range(1,1000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
-                          [sg.Text('Filename of trained CNN : ' , size=(20, 1)),
-                           sg.Input(size=(15,1), enable_events=True, key='-CNN-NAME-')],
-                          [sg.Button("Retrain current model", size=(25,1), key='-CNN-TRAIN-')],
-                          [sg.Button("Continue training current model", size=(25,1), key='-CNN-CONTINUE-TRAIN-')],
-                          [sg.Button("Fine tuning current model", size=(25,1), key='-CNN-FINE-TUNE-')],
+                          [sg.Text('Filename of trained CNN : ' , size=(35, 1))],
+                          [sg.Input(size=(33,1), enable_events=True, key='-CNN-NAME-')],
+                          [sg.Button("Retrain current model", size=(30,1), key='-CNN-TRAIN-')],
+                          [sg.Button("Continue training current model", size=(30,1), key='-CNN-CONTINUE-TRAIN-')],
+                          [sg.Button("Fine tuning current model", size=(30,1), key='-CNN-FINE-TUNE-')],
                           [sg.Text('Epochs left : ', size=(17, 1), key = '-EPOCHS-COUNT-')],
-                          [sg.Text('Current training precision : ', size=(40, 1), key = '-CURRENT-MAE-')],
-                          [sg.Text('Current validation precision : ', size=(40, 1), key = '-CURRENT-VALMAE-')],
+                          [sg.Text('Current training precision : ', size=(35, 1), key = '-CURRENT-MAE-')],
+                          [sg.Text('Current validation precision : ', size=(35, 1), key = '-CURRENT-VALMAE-')],
                           [sg.Text('Currently running :', size=(15, 1)), 
                           sg.Text('No', text_color=('red'), size= (30,1), key = "-MODEL-RUN-STATE-")]
                          ]
     
-    predictions_frame = [
-                    [sg.Text('')],
-                    [sg.Input(size=(20,1), enable_events=True, key='-MODEL-FOLDER2-'),
-                     sg.FileBrowse("Select file",size=(12,1))],
-                    [sg.Button('Landmarks detection', key ='LM-DETECT')]
+    image_processing_frame = [
+                    [sg.Text('', size = (50,1))],
+                    [sg.Button('Automated Landmarks Detection',  size = (30,1),  key ='LM-DETECT')],
+                    [sg.Button("Registration", size = (30,1), key="-REGISTRATION-")]
                     ]
     
     
@@ -1261,8 +1261,7 @@ def make_main_window(size, graph_canvas_width):
     neural_network_frame = [
                             [sg.Frame("Create or load the neural network", layout = CNN_creation_frame)], 
                             [sg.Frame("Train the neural network", layout = CNN_training_frame)], 
-                            [sg.Frame("Predict landmarks", layout = predictions_frame)],
-                            [sg.Button("Registration", size = (15,1), key="-REGISTRATION-")]
+                            [sg.Frame("Automated image processing", layout = image_processing_frame)],
                             ]
     
     communication_window = [[sg.Text("", key="-PRINT-", size=(130, 10))]]
