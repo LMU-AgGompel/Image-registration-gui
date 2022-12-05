@@ -48,6 +48,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     df_files = None
     df_landmarks = None
     df_model = None
+    df_predicted_landmarks = None
     
     # Variable used to store previous event, used to allow for keyboard inputs
     # with simultaneous keys, like Ctrl+S, etc..
@@ -80,6 +81,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 df_landmarks   = pd.read_csv( os.path.join(shared['proj_folder'], df_landmarks_name) )
                 df_model       = pd.read_csv( os.path.join(shared['proj_folder'], df_model_name) )
                 
+                if os.path.exists( os.path.join(shared['proj_folder'], df_predicted_landmarks_name) ) :
+                    df_predicted_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
+                
                 shared['ref_image'] = open_image(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
                 shared['im_index'] = 0
                 
@@ -90,7 +94,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                     df_landmarks[landmark] = df_landmarks[landmark].astype(object)
                 
                 # update graph objects, landmark window, and all fields related to the image:
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)               
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)               
 
                 
             except Exception as error_message:
@@ -105,7 +109,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-NEW-IMAGES-':
             if  (df_files is not None) and (shared['im_index']>0):
                 df_files, df_landmarks = add_new_images(shared, df_files, df_landmarks, df_model)
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
 
         if event == '-MERGE-PROJECTS-':
             merge_projects()
@@ -116,17 +120,17 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):
                 shared = select_image(shared, df_files)
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
             
         if event == "Next":
             if (df_files is not None) and (shared['im_index'] < (len(df_files.index)-1)):
                 shared['im_index'] += 1
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
-        
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
+                
         if event == "Previous":
             if  (df_files is not None) and (shared['im_index']>0):
                 shared['im_index'] -= 1
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
         
         if event == "Next not annotated":
             if df_files is not None:
@@ -137,7 +141,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 
                 if len(indeces) > 0:
                     shared['im_index'] = indeces[0]
-                    shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window)
+                    shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
         
         if event == "-NORMALIZATION-":
             shared['normalize'] = values['-NORMALIZATION-']
@@ -225,6 +229,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
 
         if event == 'LM-DETECT':
             CNN_predict_landmarks(df_files, df_model, main_window, shared, values)
+            df_predicted_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
         
 
         # -------------------- keyboard shortcuts: ----------------------------
@@ -360,18 +365,17 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                         landmarks_window[shared['prev_landmark']].update(button_color = ("black", "SteelBlue3"))
                                                                    
                 shared['prev_landmark'] = shared['curr_landmark']
-                
-                [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==shared['curr_landmark'], "target"].values[0])
-                [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
                 update_landmarks_preview(os.path.join(shared['proj_folder'], ref_image_name), main_window, 300)
-                main_window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size=30, color = "red")
+                draw_landmark_preview(main_window, df_model, shared, color = "red", size = 5)
+                
                 update_image(shared['curr_image'], main_window, graph_canvas_width)
 
                 try:
-                    [x,y] = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], shared['curr_landmark']].values[0])
-                    [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
-                    main_window['-GRAPH-'].draw_point((x,y), size = shared['pt_size'], color = "blue")
+                    draw_landmark(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
                     
+                    if df_predicted_landmarks is not None:
+                        draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
+                        
                 except:
                     pass
 
@@ -383,22 +387,13 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
         if event == "-SHOW-ALL-":
             if shared['curr_image']:
-                # refresh the image
                 update_image(shared['curr_image'], main_window, graph_canvas_width)
                 
-            for landmark in shared['list_landmarks']:
-                # draw the landmarks
-                try:
-                    [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
-                    [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
-                    main_window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size=30, color = "red")
-                    
-                    [x,y] = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], landmark].values[0])
-                    [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
-                    main_window['-GRAPH-'].draw_point((x,y), size = shared['pt_size'], color = "blue")
-                
-                except:
-                    pass
+            draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size = 5)
+            draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
+            
+            if df_predicted_landmarks is not None:
+                draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
                 
         if event == "-DELETE_LDMK-":
             if shared['curr_landmark']:                

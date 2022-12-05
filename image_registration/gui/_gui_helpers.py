@@ -108,6 +108,38 @@ def update_image(image, window, canvas_width):
     window['-GRAPH-'].draw_image(data=bio.getvalue(), location=(0,height))
     return
 
+def draw_landmark_preview(window, df_model, shared, color = "red", size = 30):
+    [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==shared['curr_landmark'], "target"].values[0])
+    [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
+    window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
+    return
+
+def draw_landmarks_preview_all(window, df_model, shared, color = "red", size = 30):
+    for landmark in shared['list_landmarks']:
+        try:
+            [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
+            [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
+            window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
+        except:
+            pass
+    return
+
+def draw_landmark(window, df_lmk, shared, color = "red", size = 30):
+    [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], shared['curr_landmark']].values[0])
+    [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
+    window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+    return
+
+def draw_landmarks_all(window, df_lmk, shared, color = "red", size = 30):
+    for landmark in shared['list_landmarks']:
+        try:
+            [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], landmark].values[0])
+            [x,y] = convert_image_coordinates_to_graph(x, y,shared['curr_image'].width, shared['curr_image'].height)
+            window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+        except:
+            pass
+    return
+
 def open_image(image_path, normalize=True):
     """
     Opens the image file, converts it into 8 bit, and optionally, normalizes it 
@@ -171,7 +203,7 @@ def update_landmarks_preview(image_path, window, canvas_width, normalize=True):
     window['-LANDMARKS-PREVIEW-'].draw_image(data=bio.getvalue(), location=(0,height))
     return
 
-def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_window, landmarks_window):
+def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window):
     """
     Parameters
     ----------
@@ -219,6 +251,11 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, main_wi
     
     # update the preview of the landmarks: 
     update_landmarks_preview(os.path.join(shared['proj_folder'], ref_image_name), main_window, 300)
+    
+    # visualize predicted landmarks, if present:
+    if df_predicted_landmarks is not None:
+        draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
+           
     
     # remove selection of the current landmark
     shared['curr_landmark'] = None
@@ -827,7 +864,8 @@ def CNN_train(window, train_folder, val_folder, df_model, shared, values):
         proj_folder =  shared['proj_folder']
         CNN_model_object =  shared['CNN_model']
         image_registration.train_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
-
+        # reload the model saved durin training:
+        shared['CNN_model'] =  Keras_load_model(os.path.join(proj_folder, model_name)+".h5")
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
     
@@ -840,7 +878,8 @@ def CNN_fine_tune(window, train_folder, val_folder, df_model, shared, values):
         proj_folder =  shared['proj_folder']
         CNN_model_object =  shared['CNN_model']
         image_registration.fine_tune_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
-
+        # reload the model saved durin training:
+        shared['CNN_model'] =  Keras_load_model(os.path.join(proj_folder, model_name)+".h5")
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
     
@@ -872,7 +911,7 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
         
         try:
             image_registration.predict_lm(df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name)
-            #threading.Thread(target = image_registration.predict_lm, args = (df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name), daemon=True).start()
+            # threading.Thread(target = image_registration.predict_lm, args = (df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name), daemon=True).start()
         except:
             window["-PRINT-"].update("An error occured during landmarks prediction.")
             
@@ -1230,7 +1269,7 @@ def make_main_window(size, graph_canvas_width):
     return sg.Window("Image Annotation Tool", layout, size=size, finalize=True, return_keyboard_events=True)
 
 
-def make_landmarks_window(model_df, landmarks_df, current_filename, location = (1200,100), size = (300,900)):
+def make_landmarks_window(model_df, landmarks_df, current_filename, location = (1200,100), size = (300,1200)):
     """
     Function used to create the extra window with buttons used to select the 
     various landmarks. The window is created only when a project is open and is 
