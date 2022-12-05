@@ -365,7 +365,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                         landmarks_window[shared['prev_landmark']].update(button_color = ("black", "SteelBlue3"))
                                                                    
                 shared['prev_landmark'] = shared['curr_landmark']
-                update_landmarks_preview(os.path.join(shared['proj_folder'], ref_image_name), main_window, 300)
+                update_landmarks_preview(shared, main_window, 300)
                 draw_landmark_preview(main_window, df_model, shared, color = "red", size = 5)
                 
                 update_image(shared['curr_image'], main_window, graph_canvas_width)

@@ -4,7 +4,7 @@ Created on Wed Jul 13 12:35:49 2022
 @authors: titouan, stefano
 """
 
-from skimage import color
+from skimage.transform import resize
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D, Convolution2D, LeakyReLU
@@ -12,9 +12,8 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
-import os,cv2,ast
+import os, ast
 import numpy as np
-import itertools
 import pandas as pd
 import math
 import random as rd
@@ -22,6 +21,7 @@ from scipy import ndimage
 import glob
 import threading
 import copy
+import PIL
 
 def image_downsample(img, binning, normalize=True):
     """
@@ -39,12 +39,14 @@ def image_downsample(img, binning, normalize=True):
     img : 2D numpy array
         binned image.
     """
-    width = int(img.shape[1] / binning)
-    height = int(img.shape[0] / binning)
+    width = int(img.shape[0] / binning)
+    height = int(img.shape[1] / binning)
     dim = (width, height)
-    img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    img = resize(img, dim, preserve_range=True, anti_aliasing=True).astype('uint16')
+    
     if normalize:
         img = img / np.mean(img[img>0])
+        
     return img
 
 def landmarks_downsample(file_name, df_landmarks, df_model, binning):
@@ -281,15 +283,16 @@ def training_data_preprocessing(output_folder_train, output_folder_val, df_landm
     # bin, normalize and augment the training data:
     for file_name in df_landmarks_train["file name"].unique():
         
-        img = cv2.imread(df_files.loc[df_files["file name"] == file_name, "full path"].values[0])
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = PIL.Image.open(df_files.loc[df_files["file name"] == file_name, "full path"].values[0])
+        img = np.asarray(img)
         
         if binning:
             img = image_downsample(img, binning, normalization)
             df_landmarks_train = landmarks_downsample(file_name, df_landmarks_train, df_model, binning)
             
         # save the image in the training folder:
-        cv2.imwrite(os.path.join(output_folder_train, file_name), img)
+        img_PIL = PIL.Image.fromarray(img)
+        img_PIL.save(os.path.join(output_folder_train, file_name))
 
         # randomly rotate the image and its corresponding landmarks:  
         for k in range(n_data_augmentation):
@@ -302,7 +305,8 @@ def training_data_preprocessing(output_folder_train, output_folder_val, df_landm
             image_average = np.mean(img)
             gauss_noise = np.random.normal(0, 0.02, scaled_image.shape)
             augmented_image = scaled_image + gauss_noise
-            cv2.imwrite(os.path.join(output_folder_train, new_file_name), augmented_image)
+            augmented_image_PIL = PIL.Image.fromarray(augmented_image)
+            augmented_image_PIL.save(os.path.join(output_folder_train, new_file_name))
             # duplicate the landmarks for the current file:
             df_landmarks_train = duplicate_landmarks(df_landmarks_train, df_model, new_file_name, file_name)
             # rotate the landmarks of the new file:
@@ -313,17 +317,19 @@ def training_data_preprocessing(output_folder_train, output_folder_val, df_landm
     
     print("Finished augmenting training data.")
     
-    # bin and normalize the testing data:
+    # bin and normalize the validation data:
     for file_name in df_landmarks_val["file name"].unique():
-        img = cv2.imread(df_files.loc[df_files["file name"] == file_name, "full path"].values[0])
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = PIL.Image.open(df_files.loc[df_files["file name"] == file_name, "full path"].values[0])
+        img = np.asarray(img)
+        
         if binning:
             img = image_downsample(img, binning, normalization)
             df_landmarks_val = landmarks_downsample(file_name, df_landmarks_val, df_model, binning)
                 
         # save the image in the validation folder:
-        cv2.imwrite(os.path.join(output_folder_val, file_name), img)
-
+        img_PIL = PIL.Image.fromarray(img)
+        img_PIL.save(os.path.join(output_folder_val, file_name))
+            
     df_landmarks_train.to_csv(os.path.join(output_folder_train, "df_landmarks.csv"))
     df_landmarks_val.to_csv(os.path.join(output_folder_val, "df_landmarks.csv"))
     
@@ -371,7 +377,8 @@ def import_data(folder, df_landmarks, df_files, df_model):
         #importing the images converting them to grayscale and append to a list:
         for image_path in df_files["full path"].unique():
             
-            image = cv2.imread(image_path, cv2.IMREAD_ANYDEPTH)
+            image = PIL.Image.open(image_path)
+            image = np.asarray(image)
             images_array.append(image)
             landmark_positions = []
             
@@ -444,10 +451,14 @@ def check_image_shape(df_files):
     """
     
     img_path = df_files["full path"].unique()[0]
-    img_shape = cv2.imread(img_path, cv2.IMREAD_ANYDEPTH).shape
+    img = PIL.Image.open(img_path)
+    img = np.asarray(img)
+    img_shape = img.shape
     
     for img_path in df_files["full path"].unique():
-        if img_shape != cv2.imread(img_path, cv2.IMREAD_ANYDEPTH).shape:
+        img = PIL.Image.open(img_path)
+        img = np.asarray(img)
+        if img_shape != img.shape:
             return None
 
     return img_shape
@@ -678,12 +689,16 @@ def predict_lm(df_files, df_model, model, project_folder, normalization=True, lm
 
     # importing the images, converting to grayscale and resize
     for image_name in df_files["full path"].unique():
-        image = cv2.imread(image_name)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        image = PIL.Image.open(image_name)
+        image = np.asarray(image)
+        
         if normalization:
             image = image / np.mean(image[image>0])
-        resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
-        images.append(resized)
+            
+        resized_image = resize(image, (model_height, model_width), preserve_range=True, anti_aliasing=True)
+        #resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
+        images.append(resized_image)
 
     image_width = image.shape[1]
     image_height = image.shape[0]
@@ -702,7 +717,7 @@ def predict_lm(df_files, df_model, model, project_folder, normalization=True, lm
     prediction[:,:,0] = binning_w*prediction[:,:,0]
     prediction[:,:,1] = binning_h*prediction[:,:,1]
     
-    # TO DO: reshape the results in the usual format of the landmark dataframe
+    # reshape the results in the usual format of the landmark dataframe
     landmark_names = df_model['name'].unique()
     df_pred_lmk    = df_files[['file name']].copy()
     

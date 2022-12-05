@@ -4,15 +4,15 @@ import shutil
 import glob
 import math
 import PySimpleGUI as sg
-from PIL import Image
+import PIL
 import pandas as pd
 import numpy as np
 import ast
 from datetime import datetime
-import cv2
 from ..registration.TPS import TPSwarping
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
+from skimage.transform import resize
 import random as rd
 import image_registration
 from tensorflow.keras.models import load_model as Keras_load_model
@@ -155,13 +155,14 @@ def open_image(image_path, normalize=True):
     a Pillow image.
 
     """
-    image = Image.open(image_path)
+    image = PIL.Image.open(image_path)
     image = np.asarray(image)
     image = convert_image_to8bit(image, normalize)
-    image = Image.fromarray(image)
+    image = PIL.Image.fromarray(image)
+    
     return image
 
-def update_landmarks_preview(image_path, window, canvas_width, normalize=True):
+def update_landmarks_preview(shared, window, canvas_width, normalize=True):
     """
     Function used to update the image in the landmarks preview element of the main window.
     It opens the reference image file, converts it into 8 bit, normalizes it and resizes it.
@@ -182,10 +183,12 @@ def update_landmarks_preview(image_path, window, canvas_width, normalize=True):
     None.
 
     """
-    image = Image.open(image_path)
-    image = np.asarray(image)
-    image = convert_image_to8bit(image, normalize)
-    image = Image.fromarray(image)
+    # image = PIL.Image.open(image_path)
+    # image = np.asarray(image)
+    # image = convert_image_to8bit(image, normalize)
+    # image = PIL.Image.fromarray(image)
+    
+    image = shared['ref_image']
     
     width = image.width
     height = image.height
@@ -250,7 +253,7 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
         landmarks_window = make_landmarks_window(df_model, df_landmarks, shared['curr_file'])
     
     # update the preview of the landmarks: 
-    update_landmarks_preview(os.path.join(shared['proj_folder'], ref_image_name), main_window, 300)
+    update_landmarks_preview(shared, main_window, 300)
     
     # visualize predicted landmarks, if present:
     if df_predicted_landmarks is not None:
@@ -392,10 +395,10 @@ def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = Non
     return snake*binning
 
 def rebin(img, binning):
-    width = int(img.shape[1] / binning)
-    height = int(img.shape[0] / binning)
+    width = int(img.shape[0] / binning)
+    height = int(img.shape[1] / binning)
     dim = (width, height)
-    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    resized = resize(img, dim,  preserve_range=True, anti_aliasing=True)
     return resized
 
 def enhance_edges(img, binning, smoothing):
@@ -672,6 +675,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
             # Index for loading bar:
             loading_bar_i=0   
             dialog_box.update(value='Registration started, this may take a while..')
+            
             # Getting reference landmarks
             c_dst=[]
             landmarks_list = df_model["name"].values
@@ -683,7 +687,9 @@ def registration_window(shared, df_landmarks, df_model, df_files):
             # Getting snake landmarks for reference
             if df_snake is not None:
                 df_snake["N_points"] = 0
-                ref_image = cv2.imread(os.path.join(shared['proj_folder'], ref_image_name),  cv2.IMREAD_ANYDEPTH)
+                ref_image = PIL.Image.open(os.path.join(shared['proj_folder'], ref_image_name))
+                ref_image = np.asarray(ref_image)
+                
                 for index, row in df_snake.iterrows():
                     # get the positions of the two landmarks in target image:
                     lmk1_name, lmk2_name  = row["Lmk1"], row["Lmk2"]
@@ -717,15 +723,15 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                 
             df_info = pd.DataFrame(columns=['file name', 'channel', 'image quality', 'notes'])
             
+            dialog_box.update(value='Image registration in progress')
             
             # Start looping through the images to register:
             for file_name in file_names:
-                # Refresh the dialog box:
-                dialog_box.update(value='Image registration in progress')
                 
                 # Open the source image:
                 file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
-                img = cv2.imread(file_path,  cv2.IMREAD_ANYDEPTH)
+                img = PIL.Image.open(file_path)
+                img = np.asarray(img)
                 shape_src = np.asarray(img.shape)
                 
                 # Get image landmarks
@@ -774,11 +780,13 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                 # Resize the image according to the slider value
                 size = warped.shape*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
                 size = [int(x) for x in size]
-                warped = cv2.resize(warped,(size[1],size[0]))
+                warped = resize(warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
                 
                 # Save the registered image
                 destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)
-                cv2.imwrite(destination_path, warped)
+                
+                warped_PIL = PIL.Image.fromarray(warped)
+                warped_PIL.save(destination_path)
                 
                 image_quality = df_files.loc[df_files["file name"] == file_name, "image quality"].values[0]
                 notes = df_files.loc[df_files["file name"] == file_name, "notes"].values[0]
@@ -796,11 +804,13 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                     for ch in channels:
                          ch_file_path = temp_df.loc[temp_df['extra channel name']==ch,"full path"].values[0]
                          ch_file_name = os.path.basename(ch_file_path)
-                         ch_img = cv2.imread(ch_file_path,  cv2.IMREAD_ANYDEPTH)
+                         ch_img = PIL.Image.open(ch_file_path)
+                         ch_img = np.asarray(ch_img)
                          ch_warped = TPSwarping(ch_img, c_src, c_dst, warped_shape)
-                         ch_warped = cv2.resize(ch_warped,(size[1],size[0]))
+                         ch_warped = resize(ch_warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
                          ch_destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], ch_file_name)
-                         cv2.imwrite(ch_destination_path, ch_warped)
+                         ch_warped_PIL = PIL.Image.fromarray(ch_warped)
+                         ch_warped_PIL.save(ch_destination_path)
                          df_info_row_data = [[ch_file_name, ch, image_quality, notes]]
                          df_info_row = pd.DataFrame(df_info_row_data, columns=df_info_row_columns)
                          df_info = pd.concat([df_info_row, df_info])
@@ -864,8 +874,8 @@ def CNN_train(window, train_folder, val_folder, df_model, shared, values):
         proj_folder =  shared['proj_folder']
         CNN_model_object =  shared['CNN_model']
         image_registration.train_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
-        # reload the model saved durin training:
-        shared['CNN_model'] =  Keras_load_model(os.path.join(proj_folder, model_name)+".h5")
+        # reload the model saved during training:
+        # shared['CNN_model'] =  Keras_load_model(os.path.join(proj_folder, model_name)+".h5")
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
     
@@ -879,7 +889,7 @@ def CNN_fine_tune(window, train_folder, val_folder, df_model, shared, values):
         CNN_model_object =  shared['CNN_model']
         image_registration.fine_tune_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_model, nb_epochs, model_name, CNN_model_object, window)
         # reload the model saved durin training:
-        shared['CNN_model'] =  Keras_load_model(os.path.join(proj_folder, model_name)+".h5")
+        # shared['CNN_model'] =  Keras_load_model(os.path.join(proj_folder, model_name)+".h5")
     else:
         window["-PRINT-"].update("** No model available, please create or load a neural network model **")
     
