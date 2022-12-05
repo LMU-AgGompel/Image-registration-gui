@@ -1,19 +1,24 @@
+'''
+  Helper functions for the graphical interface
+  
+  Created on Fri Mar 25 18:13:00 2022
+  
+  @author: Stefano
+'''
+
 import io
 import os
 import shutil
 import glob
-import math
 import PySimpleGUI as sg
 import PIL
 import pandas as pd
 import numpy as np
 import ast
-from datetime import datetime
 from ..registration.TPS import TPSwarping
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
 from skimage.transform import resize
-import random as rd
 import image_registration
 from tensorflow.keras.models import load_model as Keras_load_model
 
@@ -34,6 +39,11 @@ df_channels_name = "extra_channels_dataframe.csv"
 ref_image_name = "reference_image.tif"
 
 df_predicted_landmarks_name = "predicted_landmarks_dataframe.csv"
+
+
+#
+# ------ helper functions for the graph object and image  visualization ----- #
+#
 
 
 def update_image_fields(im_index, image, df_files, window, graph_canvas_width):
@@ -68,12 +78,12 @@ def update_image_fields(im_index, image, df_files, window, graph_canvas_width):
     window["-IMAGE-QUALITY-"].update(value=image_quality)
     window["-IMAGE-NOTES-"].update(value=image_notes)
     window["-IMAGE-ANNOTATED-"].update(value=image_annotated)
-    update_image(image, window, graph_canvas_width)
+    update_image_view(image, window, graph_canvas_width)
     
     return
 
 
-def update_image(image, window, canvas_width):
+def update_image_view(image, window, canvas_width):
     """
     Function used to show an image on the graph element of a window
     
@@ -379,38 +389,10 @@ def update_progress_bar(df_files, window):
     window["-PRINT-"].update(str(n_annotated)+" annotated images out of "+str(n_not_annotated+n_annotated) )
     return   
 
-def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = None, points_spacing = 30, binning=1):
-    distance = np.sqrt((p1_x-p2_x)**2+(p1_y-p2_y)**2)
-    n_points = N or int(distance/points_spacing)
 
-    r = np.linspace(p1_y, p2_y, n_points)/binning
-    c = np.linspace(p1_x, p2_x, n_points)/binning
-        
-    init = np.array([r, c]).T
-    img = enhance_edges(img, binning, smoothing)
-    snake = active_contour(img,
-                   init, boundary_condition='fixed', coordinates='rc', 
-                   alpha=alpha, beta=1, w_line=w_line, w_edge=0, gamma= 0.1)
-    
-    return snake*binning
-
-def rebin(img, binning):
-    width = int(img.shape[0] / binning)
-    height = int(img.shape[1] / binning)
-    dim = (width, height)
-    resized = resize(img, dim,  preserve_range=True, anti_aliasing=True)
-    return resized
-
-def enhance_edges(img, binning, smoothing):
-    img = rebin(img, binning)
-    # filtered_image = difference_of_gaussians(img, 2, 10)
-    # could use the following to avoid relying on scikit-image 0.19
-    filtered_image = gaussian(img, 10) - gaussian(img, 2)
-    filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
-    filtered_image = 1 -filtered_image
-    edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
-    edges = gaussian(edges, smoothing, preserve_range=False)
-    return edges
+#
+# ------ helper functions related with the management of project files ----- #
+#
 
 
 def create_new_project():
@@ -459,7 +441,6 @@ def create_new_project():
               ]
     
     new_project_window = sg.Window("Create New Project", layout, modal=True)
-    choice = None
     
     while True:
         event, values = new_project_window.read()
@@ -539,65 +520,228 @@ def create_new_project():
     
     return
 
-def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
+
+def merge_projects():
     """
-    Function used to locate the image files of additional channels 
-    corresponding to each image of the reference channels in the project.
-    The function considers all the files included in the df_files dataframe and 
-    look in a list of folders for files with a matching name except for the 
-    channel label.
-    
-    Parameters
-    ----------
-    df_files : pandas dataframe
-        .
-    folders : str
-        a string containing multiple folders, separated by newlines.
-    ref_channel : str
-        a string defining which part of the filename corresponds to a channel label.
-    dialog_box : pysimplegui textbox
-        the dialoge box of the registration window, for printing messages/errors.
-    Returns
-    -------
-    df_channels : pandas dataframe
-        a pandas dataframe containing the filename and channel name of files 
-        corresponding to additional channels of each image file in the original 
-        df_files dataframe.
+    Function used to merge two existing projects.
+    It opens a new graphical window where the user sleect the paths to the two
+    projects to merge and the path where to save the new merged project.
+
+    Finally, it creates all the new project files in the target folder.
+          
     """
-    # Make sure folders is a list of folder paths:
-    folders = folders.split("\n")
-    file_names = df_files["file name"].unique()
     
-    # Initialize df_channels:
-    df_channels = pd.DataFrame(columns=['file name', 'extra channel name', 'full path'])
-    skipped_files = False
-    for file_name in file_names:
-        try:
-            file_name_part1, file_name_part2 = file_name.split(ref_channel)
-            file_pattern = os.path.join("**", file_name_part1+r"*"+file_name_part2)
+    # GUI - Define a new window to collect input:
+    layout = [[sg.Text("Project name: ", size=(20, 1)),
+               sg.Input(size=(25,8), enable_events=True,  key='-NEW-PROJECT-NAME-')],
+              
+              [sg.Text('Project location: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-NEW-PROJECT-FOLDER-'),
+               sg.FolderBrowse()],
+              
+              [sg.Text('Location of Project 1: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-PROJECT-FOLDER-1-'),
+               sg.FolderBrowse()], 
+              
+              [sg.Text('Location of Project 2: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-PROJECT-FOLDER-2-'),
+               sg.FolderBrowse()], 
+
+              [sg.Button("Create the project: ", size = (20,1), key="-CREATE-PROJECT-")],
+              
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              
+              ]
+    
+    merge_projects_window = sg.Window("Create New Project", layout, modal=True)
+    
+    while True:
+        event, values = merge_projects_window.read()
+
+        if event == '-CREATE-PROJECT-':
             
-            for folder in folders:
-                new_file_names = glob.glob(os.path.join(folder, file_pattern), recursive=True)
-                for new_file_name in new_file_names:
-                    new_file_name_tail = os.path.split(new_file_name)[1]
-                    channel = new_file_name_tail.split(file_name_part1)[1].split(file_name_part2)[0]
-                    if new_file_name_tail  == file_name:
-                        pass
-                    else:
-                        # append new row to df_channels:
-                        row_data = [[file_name, channel, new_file_name]]
-                        row_columns = ['file name', 'extra channel name', 'full path']
-                        row = pd.DataFrame(row_data, columns=row_columns)
-                        df_channels = pd.concat([row, df_channels])
-                        pass
-        except:
-            skipped_files = True
-            pass
+            ## Create the folder
+            parent_folder = values['-NEW-PROJECT-FOLDER-']
+            project_name  = values['-NEW-PROJECT-NAME-']
+            
+            project_folder = os.path.join(parent_folder, project_name)
+            
+            dialog_box = merge_projects_window["-DIALOG-"]
+            
+            if os.path.exists(project_folder):
+                dialog_box.update(value=dialog_box.get()+'\n - The project folder already exists.')
+                break
+            else:
+                os.mkdir(project_folder)
+                dialog_box.update(value=dialog_box.get()+'\n - New project folder has been created.')
+                
+            folder_1 = values['-PROJECT-FOLDER-1-']
+            
+            try:
+                df_files_1      = pd.read_csv( os.path.join(folder_1, df_files_name) )
+                df_landmarks_1  = pd.read_csv( os.path.join(folder_1, df_landmarks_name) )
+                df_model_1      = pd.read_csv( os.path.join(folder_1, df_model_name) )
+                reference_image_path = os.path.join(folder_1, ref_image_name)
+            except:
+                dialog_box.update(value=dialog_box.get()+'\n - Problem opening project files of the the first project.')
+                    
+            folder_2 = values['-PROJECT-FOLDER-2-']
+            
+            try:
+            
+                df_files_2      = pd.read_csv( os.path.join(folder_2, df_files_name) )
+                df_landmarks_2  = pd.read_csv( os.path.join(folder_2, df_landmarks_name) )
+                
+            except:
+                dialog_box.update(value=dialog_box.get()+'\n - Problem opening project files of the the second project.')
+               
+            if set(df_landmarks_1.columns) == set(df_landmarks_2.columns):
+                
+                df_files = pd.concat([df_files_1, df_files_2])
+                df_files = df_files.drop_duplicates(subset='file name', keep="first")
+                
+                df_landmarks = pd.concat([df_landmarks_1, df_landmarks_2])
+                df_landmarks = df_landmarks.drop_duplicates(subset='file name', keep="first")     
+
+                try:
+                    new_ref_image_path = os.path.join(project_folder, ref_image_name)
+                    shutil.copy(reference_image_path, new_ref_image_path)
+                    df_files.to_csv(os.path.join(project_folder, df_files_name))
+                    df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+                    df_model_1.to_csv(os.path.join(project_folder, df_model_name))
+                    dialog_box.update(value=dialog_box.get()+'\n - Merged files saved in the destination folder.')
+                    
+                except:
+                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Error occurred while merging the files."')
+                
+            else:
+                dialog_box.update(value=dialog_box.get()+'\n - The projects are based on different models. Can not merge.')
+            
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
         
-    if skipped_files:
-        dialog_box.update(value="WARNING: some files in your project will be skipped during the registration. \n Please double check the results. ")
+    merge_projects_window.close()
     
-    return df_channels
+    return
+
+def add_new_images(shared, df_files, df_landmarks, df_model):
+    """
+    Function used to add new images to an existing project
+          
+    """
+    
+    # GUI - Define a new window to collect input:
+    layout = [             
+              [sg.Text("New image files extension: ", size=(20, 1)),
+               sg.Input(size=(25,8), enable_events=True,  key='-IMAGE-EXTENSION-')],
+              
+              [sg.Text('New images location: ', size=(20, 1)), 
+               sg.Input(size=(25,8), enable_events=True, key='-NEW-IMAGES-FOLDER-'),
+               sg.FolderBrowse()], 
+              
+              [sg.Button("Update the project: ", size = (20,1), key="-UPDATE-PROJECT-")],
+              
+              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
+              
+              ]
+    
+    add_images_window = sg.Window("Add new images", layout, modal=True)
+    
+    while True:
+        event, values = add_images_window.read()
+
+        if event == '-UPDATE-PROJECT-':
+
+            project_folder = shared['proj_folder']
+        
+            extension = values['-IMAGE-EXTENSION-']
+            images_folder = values['-NEW-IMAGES-FOLDER-']
+            
+            temp_path = os.path.join(images_folder,r"**")
+            temp_path = os.path.join(temp_path,r"*."+extension)
+    
+            image_full_paths = glob.glob(temp_path, recursive=True)
+            image_names = [os.path.split(path)[1] for path in image_full_paths]
+            
+            dialog_box = add_images_window["-DIALOG-"]
+            dialog_box.update(value=dialog_box.get()+'\n - '+str(len(image_names))+' images found.')
+            
+            temp_df_files = pd.DataFrame({'file name':image_names,'full path':image_full_paths})
+            temp_df_files["image quality"] = "undefined"
+            temp_df_files["notes"] = "none"
+            temp_df_files["annotated"] = "No"
+            
+            df_files = pd.concat([df_files, temp_df_files])
+            df_files = df_files.drop_duplicates(subset='file name', keep="first")
+            df_files = df_files.reset_index(drop=True)
+            df_files.to_csv(os.path.join(project_folder, df_files_name))
+            dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names updated.')
+
+            landmark_names = df_model['name'].values
+            temp_df_landmarks = df_files[['file name']].copy()
+            for landmark in landmark_names:
+                temp_df_landmarks[landmark] = np.nan
+                
+            df_landmarks = pd.concat([df_landmarks, temp_df_files])
+            df_landmarks = df_landmarks.reset_index(drop=True)
+            df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+            dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates updated.')
+
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
+        
+    add_images_window.close()
+    
+    return df_files, df_landmarks
+
+def select_image(shared, df_files):
+    """
+    Function used to jump to a specific image in the current project.
+    It creates a pop-up window and allows to search among all the file names 
+    included in the current project.
+    It returns an updated 'shared' dictionary where the index of the current image 
+    has been updated to point to the selected file name.
+          
+    """
+    try:
+        names = df_files["file name"].values
+    except:
+        names = []
+    
+    layout = [  [sg.Text('Search an image:')],
+            [sg.Input(do_not_clear=True, size=(20,1),enable_events=True, key='_INPUT_')],
+            [sg.Listbox(names, size=(20,10), enable_events=True, key='_LIST_')],
+            [sg.Button('Exit')]]
+
+    select_image_window = sg.Window('Search').Layout(layout)
+    # Event Loop
+    while True:
+        event, values = select_image_window.Read()
+        if event is None or event == 'Exit':                # always check for closed window
+            break
+        if values['_INPUT_'] != '':                         # if a keystroke entered in search field
+            search = values['_INPUT_']
+            new_values = [x for x in names if search in x] 
+            select_image_window.Element('_LIST_').Update(new_values)
+        else:
+            select_image_window.Element('_LIST_').Update(names)
+        if event == '_LIST_' and len(values['_LIST_']):    
+            chosen_file = values['_LIST_'][0]
+            sg.Popup('Selected ', chosen_file)
+            index = 0
+            try:
+                index = int( df_files[df_files["file name"]==chosen_file].index[0] )
+            except:
+                pass
+            shared['im_index'] = index
+            
+    select_image_window.Close()
+    return shared
+
+
+#
+# ------------------------- helper functions for image registration: -------------------------------  #
+#
 
 
 def registration_window(shared, df_landmarks, df_model, df_files):
@@ -830,6 +974,105 @@ def registration_window(shared, df_landmarks, df_model, df_files):
     registration_window.close()    
     return
 
+def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
+    """
+    Function used to locate the image files of additional channels 
+    corresponding to each image of the reference channels in the project.
+    The function considers all the files included in the df_files dataframe and 
+    look in a list of folders for files with a matching name except for the 
+    channel label.
+    
+    Parameters
+    ----------
+    df_files : pandas dataframe
+        .
+    folders : str
+        a string containing multiple folders, separated by newlines.
+    ref_channel : str
+        a string defining which part of the filename corresponds to a channel label.
+    dialog_box : pysimplegui textbox
+        the dialoge box of the registration window, for printing messages/errors.
+    Returns
+    -------
+    df_channels : pandas dataframe
+        a pandas dataframe containing the filename and channel name of files 
+        corresponding to additional channels of each image file in the original 
+        df_files dataframe.
+    """
+    # Make sure folders is a list of folder paths:
+    folders = folders.split("\n")
+    file_names = df_files["file name"].unique()
+    
+    # Initialize df_channels:
+    df_channels = pd.DataFrame(columns=['file name', 'extra channel name', 'full path'])
+    skipped_files = False
+    for file_name in file_names:
+        try:
+            file_name_part1, file_name_part2 = file_name.split(ref_channel)
+            file_pattern = os.path.join("**", file_name_part1+r"*"+file_name_part2)
+            
+            for folder in folders:
+                new_file_names = glob.glob(os.path.join(folder, file_pattern), recursive=True)
+                for new_file_name in new_file_names:
+                    new_file_name_tail = os.path.split(new_file_name)[1]
+                    channel = new_file_name_tail.split(file_name_part1)[1].split(file_name_part2)[0]
+                    if new_file_name_tail  == file_name:
+                        pass
+                    else:
+                        # append new row to df_channels:
+                        row_data = [[file_name, channel, new_file_name]]
+                        row_columns = ['file name', 'extra channel name', 'full path']
+                        row = pd.DataFrame(row_data, columns=row_columns)
+                        df_channels = pd.concat([row, df_channels])
+                        pass
+        except:
+            skipped_files = True
+            pass
+        
+    if skipped_files:
+        dialog_box.update(value="WARNING: some files in your project will be skipped during the registration. \n Please double check the results. ")
+    
+    return df_channels
+
+
+def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = None, points_spacing = 30, binning=1):
+    distance = np.sqrt((p1_x-p2_x)**2+(p1_y-p2_y)**2)
+    n_points = N or int(distance/points_spacing)
+
+    r = np.linspace(p1_y, p2_y, n_points)/binning
+    c = np.linspace(p1_x, p2_x, n_points)/binning
+        
+    init = np.array([r, c]).T
+    img = enhance_edges(img, binning, smoothing)
+    snake = active_contour(img,
+                   init, boundary_condition='fixed', coordinates='rc', 
+                   alpha=alpha, beta=1, w_line=w_line, w_edge=0, gamma= 0.1)
+    
+    return snake*binning
+
+def rebin(img, binning):
+    width = int(img.shape[0] / binning)
+    height = int(img.shape[1] / binning)
+    dim = (width, height)
+    resized = resize(img, dim,  preserve_range=True, anti_aliasing=True)
+    return resized
+
+def enhance_edges(img, binning, smoothing):
+    img = rebin(img, binning)
+    # filtered_image = difference_of_gaussians(img, 2, 10)
+    # could use the following to avoid relying on scikit-image 0.19
+    filtered_image = gaussian(img, 10) - gaussian(img, 2)
+    filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
+    filtered_image = 1 -filtered_image
+    edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
+    edges = gaussian(edges, smoothing, preserve_range=False)
+    return edges
+
+
+#
+# ------------------------- helper functions for the CNN model: -------------------------------  #
+#
+
 
 def CNN_create(window, model_input_shape, df_model):
     '''
@@ -934,226 +1177,10 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
     return
 
 
-def merge_projects():
-    """
-    Function used to merge two existing projects.
-    It opens a new graphical window where the user sleect the paths to the two
-    projects to merge and the path where to save the new merged project.
+#
+#  ------------------  Definition of Main GUI windows ----------------------- #
+#
 
-    Finally, it creates all the new project files in the target folder.
-          
-    """
-    
-    # GUI - Define a new window to collect input:
-    layout = [[sg.Text("Project name: ", size=(20, 1)),
-               sg.Input(size=(25,8), enable_events=True,  key='-NEW-PROJECT-NAME-')],
-              
-              [sg.Text('Project location: ', size=(20, 1)), 
-               sg.Input(size=(25,8), enable_events=True, key='-NEW-PROJECT-FOLDER-'),
-               sg.FolderBrowse()],
-              
-              [sg.Text('Location of Project 1: ', size=(20, 1)), 
-               sg.Input(size=(25,8), enable_events=True, key='-PROJECT-FOLDER-1-'),
-               sg.FolderBrowse()], 
-              
-              [sg.Text('Location of Project 2: ', size=(20, 1)), 
-               sg.Input(size=(25,8), enable_events=True, key='-PROJECT-FOLDER-2-'),
-               sg.FolderBrowse()], 
-
-              [sg.Button("Create the project: ", size = (20,1), key="-CREATE-PROJECT-")],
-              
-              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
-              
-              ]
-    
-    merge_projects_window = sg.Window("Create New Project", layout, modal=True)
-    choice = None
-    
-
-    
-    while True:
-        event, values = merge_projects_window.read()
-
-        if event == '-CREATE-PROJECT-':
-            
-            ## Create the folder
-            parent_folder = values['-NEW-PROJECT-FOLDER-']
-            project_name  = values['-NEW-PROJECT-NAME-']
-            
-            project_folder = os.path.join(parent_folder, project_name)
-            
-            dialog_box = merge_projects_window["-DIALOG-"]
-            
-            if os.path.exists(project_folder):
-                dialog_box.update(value=dialog_box.get()+'\n - The project folder already exists.')
-                break
-            else:
-                os.mkdir(project_folder)
-                dialog_box.update(value=dialog_box.get()+'\n - New project folder has been created.')
-                
-            folder_1 = values['-PROJECT-FOLDER-1-']
-            
-            try:
-                df_files_1      = pd.read_csv( os.path.join(folder_1, df_files_name) )
-                df_landmarks_1  = pd.read_csv( os.path.join(folder_1, df_landmarks_name) )
-                df_model_1      = pd.read_csv( os.path.join(folder_1, df_model_name) )
-                reference_image_path = os.path.join(folder_1, ref_image_name)
-            except:
-                dialog_box.update(value=dialog_box.get()+'\n - Problem opening project files of the the first project.')
-                    
-            folder_2 = values['-PROJECT-FOLDER-2-']
-            
-            try:
-            
-                df_files_2      = pd.read_csv( os.path.join(folder_2, df_files_name) )
-                df_landmarks_2  = pd.read_csv( os.path.join(folder_2, df_landmarks_name) )
-                df_model_2      = pd.read_csv( os.path.join(folder_2, df_model_name) )
-            except:
-                dialog_box.update(value=dialog_box.get()+'\n - Problem opening project files of the the second project.')
-               
-            if set(df_landmarks_1.columns) == set(df_landmarks_2.columns):
-                
-                df_files = pd.concat([df_files_1, df_files_2])
-                df_files = df_files.drop_duplicates(subset='file name', keep="first")
-                
-                df_landmarks = pd.concat([df_landmarks_1, df_landmarks_2])
-                df_landmarks = df_landmarks.drop_duplicates(subset='file name', keep="first")     
-
-                try:
-                    new_ref_image_path = os.path.join(project_folder, ref_image_name)
-                    shutil.copy(reference_image_path, new_ref_image_path)
-                    df_files.to_csv(os.path.join(project_folder, df_files_name))
-                    df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
-                    df_model_1.to_csv(os.path.join(project_folder, df_model_name))
-                    dialog_box.update(value=dialog_box.get()+'\n - Merged files saved in the destination folder.')
-                    
-                except:
-                    dialog_box.update(value=dialog_box.get()+'\n ***ERROR*** \n - "Error occurred while merging the files."')
-                
-            else:
-                dialog_box.update(value=dialog_box.get()+'\n - The projects are based on different models. Can not merge.')
-            
-        if event == "Exit" or event == sg.WIN_CLOSED:
-            break
-        
-    merge_projects_window.close()
-    
-    return
-
-def add_new_images(shared, df_files, df_landmarks, df_model):
-    """
-    Function used to add new images to an existing project
-          
-    """
-    
-    # GUI - Define a new window to collect input:
-    layout = [             
-              [sg.Text("New image files extension: ", size=(20, 1)),
-               sg.Input(size=(25,8), enable_events=True,  key='-IMAGE-EXTENSION-')],
-              
-              [sg.Text('New images location: ', size=(20, 1)), 
-               sg.Input(size=(25,8), enable_events=True, key='-NEW-IMAGES-FOLDER-'),
-               sg.FolderBrowse()], 
-              
-              [sg.Button("Update the project: ", size = (20,1), key="-UPDATE-PROJECT-")],
-              
-              [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
-              
-              ]
-    
-    add_images_window = sg.Window("Add new images", layout, modal=True)
-    choice = None
-    
-    while True:
-        event, values = add_images_window.read()
-
-        if event == '-UPDATE-PROJECT-':
-
-            project_folder = shared['proj_folder']
-        
-            extension = values['-IMAGE-EXTENSION-']
-            images_folder = values['-NEW-IMAGES-FOLDER-']
-            
-            temp_path = os.path.join(images_folder,r"**")
-            temp_path = os.path.join(temp_path,r"*."+extension)
-    
-            image_full_paths = glob.glob(temp_path, recursive=True)
-            image_names = [os.path.split(path)[1] for path in image_full_paths]
-            
-            dialog_box = add_images_window["-DIALOG-"]
-            dialog_box.update(value=dialog_box.get()+'\n - '+str(len(image_names))+' images found.')
-            
-            temp_df_files = pd.DataFrame({'file name':image_names,'full path':image_full_paths})
-            temp_df_files["image quality"] = "undefined"
-            temp_df_files["notes"] = "none"
-            temp_df_files["annotated"] = "No"
-            
-            df_files = pd.concat([df_files, temp_df_files])
-            df_files = df_files.drop_duplicates(subset='file name', keep="first")
-            df_files = df_files.reset_index(drop=True)
-            df_files.to_csv(os.path.join(project_folder, df_files_name))
-            dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names updated.')
-
-            landmark_names = df_model['name'].values
-            temp_df_landmarks = df_files[['file name']].copy()
-            for landmark in landmark_names:
-                temp_df_landmarks[landmark] = np.nan
-                
-            df_landmarks = pd.concat([df_landmarks, temp_df_files])
-            df_landmarks = df_landmarks.reset_index(drop=True)
-            df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
-            dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates updated.')
-
-        if event == "Exit" or event == sg.WIN_CLOSED:
-            break
-        
-    add_images_window.close()
-    
-    return df_files, df_landmarks
-
-def select_image(shared, df_files):
-    """
-    Function used to jump to a specific image in the current project.
-    It creates a pop-up window and allows to search among all the file names 
-    included in the current project.
-    It returns an updated 'shared' dictionary where the index of the current image 
-    has been updated to point to the selected file name.
-          
-    """
-    try:
-        names = df_files["file name"].values
-    except:
-        names = []
-    
-    layout = [  [sg.Text('Search an image:')],
-            [sg.Input(do_not_clear=True, size=(20,1),enable_events=True, key='_INPUT_')],
-            [sg.Listbox(names, size=(20,10), enable_events=True, key='_LIST_')],
-            [sg.Button('Exit')]]
-
-    select_image_window = sg.Window('Search').Layout(layout)
-    # Event Loop
-    while True:
-        event, values = select_image_window.Read()
-        if event is None or event == 'Exit':                # always check for closed window
-            break
-        if values['_INPUT_'] != '':                         # if a keystroke entered in search field
-            search = values['_INPUT_']
-            new_values = [x for x in names if search in x] 
-            select_image_window.Element('_LIST_').Update(new_values)
-        else:
-            select_image_window.Element('_LIST_').Update(names)
-        if event == '_LIST_' and len(values['_LIST_']):    
-            chosen_file = values['_LIST_'][0]
-            sg.Popup('Selected ', chosen_file)
-            index = 0
-            try:
-                index = int( df_files[df_files["file name"]==chosen_file].index[0] )
-            except:
-                pass
-            shared['im_index'] = index
-            
-    select_image_window.Close()
-    return shared
 
 def make_main_window(size, graph_canvas_width):
     """

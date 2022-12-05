@@ -1,16 +1,17 @@
 '''
   A graphical interface to annotate, place landmarks and register images, 
   built with the PySimpleGUI TKinter framework.
+  
+  Created on Fri Mar 25 18:13:00 2022
+  
+  @author: Stefano
 '''
 
 import PySimpleGUI as sg
 import pandas as pd
 import numpy as np
-import ast
 import image_registration
 from ._gui_helpers import *
-import threading
-import time
 
 
 def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_width = 700):
@@ -162,8 +163,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             if shared['raw_image']:
                 scaling = 101/(1+values['-BRIGHTNESS-'])
                 shared['curr_image'] = np.uint8(np.asarray(shared['raw_image'])*scaling)
-                shared['curr_image'] = Image.fromarray(shared['curr_image'])
-                update_image(shared['curr_image'], main_window, graph_canvas_width)
+                shared['curr_image'] = PIL.Image.fromarray(shared['curr_image'])
+                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
 
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current
@@ -308,7 +309,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
             # refresh the graph to remove previous points:
             if shared['curr_image']:
-                update_image(shared['curr_image'], main_window, graph_canvas_width)
+                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
             
                 if values['-LINE-']:
                     if not shared['drawing_line']:
@@ -366,9 +367,10 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                                                                    
                 shared['prev_landmark'] = shared['curr_landmark']
                 update_landmarks_preview(shared, main_window, 300)
-                draw_landmark_preview(main_window, df_model, shared, color = "red", size = 5)
                 
-                update_image(shared['curr_image'], main_window, graph_canvas_width)
+                draw_landmark_preview(main_window, df_model, shared, color = "red", size = 30)
+                
+                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
 
                 try:
                     draw_landmark(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
@@ -387,9 +389,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
         if event == "-SHOW-ALL-":
             if shared['curr_image']:
-                update_image(shared['curr_image'], main_window, graph_canvas_width)
+                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
                 
-            draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size = 5)
+            draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size = 30)
             draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
             
             if df_predicted_landmarks is not None:

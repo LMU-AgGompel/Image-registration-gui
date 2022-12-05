@@ -5,10 +5,8 @@ Created on Wed Jul 13 12:35:49 2022
 """
 
 from skimage.transform import resize
-from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, BatchNormalization, Dropout, MaxPool2D, Convolution2D, LeakyReLU
-from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
@@ -302,7 +300,6 @@ def training_data_preprocessing(output_folder_train, output_folder_val, df_landm
             rotated_image = rotate_image(img, angle)
             scaled_image  = scale_image(rotated_image, zoom)
             #add noise to the image:
-            image_average = np.mean(img)
             gauss_noise = np.random.normal(0, 0.02, scaled_image.shape)
             augmented_image = scaled_image + gauss_noise
             augmented_image_PIL = PIL.Image.fromarray(augmented_image)
