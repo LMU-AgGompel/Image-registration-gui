@@ -1,7 +1,7 @@
 """
 Created on Wed Jul 13 12:35:49 2022
 
-@authors: titouan, stefano
+@authors: stefano, titouan
 """
 
 from skimage.transform import resize

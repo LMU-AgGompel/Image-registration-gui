@@ -246,7 +246,7 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     shared['curr_image'] = open_image(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
     shared['raw_image'] = shared['curr_image']
     shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]
-    shared['pt_size'] = shared['curr_image'].width / 80
+    #shared['pt_size'] = shared['curr_image'].width / 80
     
     # update all the fields related to the image (image qualty, notes, etc..)
     update_image_fields(shared['im_index'], shared['curr_image'], df_files, main_window, shared['graph_width'])
@@ -1226,13 +1226,16 @@ def make_main_window(size, graph_canvas_width):
                          ]
     
     CNN_training_frame = [
+                          [sg.Text('', size = (50,1))],
                           [sg.Text('Number of epochs : ', size=(20, 1)),
                           sg.Spin([s for s in range(1,1000)],initial_value=1, size=5, enable_events=True, key = "-EPOCHS-")],
                           [sg.Text('Filename of trained CNN : ' , size=(35, 1))],
                           [sg.Input(size=(33,1), enable_events=True, key='-CNN-NAME-')],
+                          [sg.Text('', size = (50,1))],
                           [sg.Button("Retrain current model", size=(30,1), key='-CNN-TRAIN-')],
                           [sg.Button("Continue training current model", size=(30,1), key='-CNN-CONTINUE-TRAIN-')],
                           [sg.Button("Fine tuning current model", size=(30,1), key='-CNN-FINE-TUNE-')],
+                          [sg.Text('', size = (50,1))],
                           [sg.Text('Epochs left : ', size=(17, 1), key = '-EPOCHS-COUNT-')],
                           [sg.Text('Current training precision : ', size=(35, 1), key = '-CURRENT-MAE-')],
                           [sg.Text('Current validation precision : ', size=(35, 1), key = '-CURRENT-VALMAE-')],
@@ -1280,7 +1283,7 @@ def make_main_window(size, graph_canvas_width):
                                 drag_submits=False,
                                 background_color='white')],
                          [sg.Checkbox('Draw Line', default = False, font = 'Arial 18', key='-LINE-',  enable_events=True)],
-                         [sg.Button("Save changes to the project", key="-SAVE-")]
+                         [sg.Button("Save changes to the project", key="-SAVE-", size=(30,3), font = 'Arial 12')]
                          ]
        
     annotation_frame = [[sg.Frame("Annotate images: ", layout = [[sg.Column(image_column), sg.Column(annotation_column)]])]]
@@ -1344,7 +1347,7 @@ def make_landmarks_window(model_df, landmarks_df, current_filename, location = (
             landmarks_buttons_colors.append("SteelBlue3")     
         
     layout = [[sg.Text('Select landmark: ', size=(20, 1))],
-              *[[sg.Button(LM, size=(20,1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
+              *[[sg.Button(LM, size=(20, 1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
               [sg.Button("Show all landmarks", size = (20,1), key = "-SHOW-ALL-")],
               [sg.Button("Delete current Landmark", size = (20,1), key = "-DELETE_LDMK-", button_color = ("black", "orange"))],
              ]

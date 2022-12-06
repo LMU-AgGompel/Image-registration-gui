@@ -43,7 +43,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     # Define variables shared between windows and their initial values:
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
-              'list_landmarks': None, 'drawing_line': False, 'pt_size': 10, 'normalize': True, 
+              'list_landmarks': None, 'drawing_line': False, 'pt_size': int(graph_canvas_width/15), 'ref_img_pt_size': 30, 'normalize': True, 
               'graph_width': graph_canvas_width, 'CNN_binning':10, 'CNN_augmentation': 16, 'CNN_model': None}
 
     df_files = None
@@ -368,7 +368,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared['prev_landmark'] = shared['curr_landmark']
                 update_landmarks_preview(shared, main_window, 300)
                 
-                draw_landmark_preview(main_window, df_model, shared, color = "red", size = 30)
+                draw_landmark_preview(main_window, df_model, shared, color = "red", size = shared['ref_img_pt_size'])
                 
                 update_image_view(shared['curr_image'], main_window, graph_canvas_width)
 
@@ -391,7 +391,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             if shared['curr_image']:
                 update_image_view(shared['curr_image'], main_window, graph_canvas_width)
                 
-            draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size = 30)
+            draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
             draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
             
             if df_predicted_landmarks is not None:
