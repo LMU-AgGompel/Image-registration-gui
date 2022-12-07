@@ -709,8 +709,8 @@ def select_image(shared, df_files):
         names = []
     
     layout = [  [sg.Text('Search an image:')],
-            [sg.Input(do_not_clear=True, size=(20,1),enable_events=True, key='_INPUT_')],
-            [sg.Listbox(names, size=(20,10), enable_events=True, key='_LIST_')],
+            [sg.Input(do_not_clear=True, size=(30,1),enable_events=True, key='_INPUT_')],
+            [sg.Listbox(names, size=(60,10), enable_events=True, key='_LIST_')],
             [sg.Button('Exit')]]
 
     select_image_window = sg.Window('Search').Layout(layout)
