@@ -744,7 +744,7 @@ def select_image(shared, df_files):
 #
 
 
-def registration_window(shared, df_landmarks, df_model, df_files):
+def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files):
     """
     Function used to register the images in the project.
     It starts a new window where the user can specify where to save
@@ -779,6 +779,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                sg.FileBrowse()],
               [sg.Text('Image resolution of registered images (%):',size=(38,1)),
               sg.Slider(orientation ='horizontal', key='-REGISTRATION-RESOLUTION-', range=(1,100),default_value=100)],
+              [sg.Checkbox('Include predicted landmarks?', key="-USE-PREDICTED-LMKS-", default=False, enable_events=True)],
               [sg.Checkbox('Apply the registration to additional channels?', key="-MULTI-CHANNEL-", default=False, enable_events=True)],
               [sg.Text("List all folders where to search images corresponding to additional channels:", visible=False, key="-TEXT-CH-")],
               [sg.Multiline(enter_submits=False,  size = (60,5), key='-EXTRA-CHANNELS-FOLDERS-', autoscroll=True, visible=False, do_not_clear=True)],
@@ -793,6 +794,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
     registration_window = sg.Window("Registration of the annotated images", layout, modal=True)
 
     dialog_box = registration_window["-DIALOG-"]
+    df_registration_landmarks = df_landmarks.copy() 
     df_snake = None
     
     while True:
@@ -813,8 +815,18 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                 registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=False)
           
         if event == '-SNAKE-MODEL-':
-            df_snake = pd.read_csv(values['-SNAKE-MODEL-'])              
+            df_snake = pd.read_csv(values['-SNAKE-MODEL-'])       
 
+        if event == '-USE-PREDICTED-LMKS-':
+            if values["-USE-PREDICTED-LMKS-"] == True:
+                # fill non defined landmarks using predicted landmarks
+                df_registration_landmarks.update(df_predicted_landmarks, overwrite=False)
+                
+            if values["-USE-PREDICTED-LMKS-"] == False:
+                # revert to just manually placed landmarks:
+                df_registration_landmarks = df_landmarks.copy()
+            
+            
         if event == '-REGISTRATION-SAVE-':
             # Index for loading bar:
             loading_bar_i=0   
@@ -883,7 +895,7 @@ def registration_window(shared, df_landmarks, df_model, df_files):
  
                 for LM in landmarks_list:
                     try:
-                        LM_position = df_landmarks.loc[df_landmarks["file name"]==file_name, LM].values[0]
+                        LM_position = df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, LM].values[0]
                         c_src.append(ast.literal_eval(LM_position))
                     except:
                         pass
@@ -901,8 +913,8 @@ def registration_window(shared, df_landmarks, df_model, df_files):
                         # get the positions of the two landmarks in target image:
                         lmk1_name = row["Lmk1"]
                         lmk2_name = row["Lmk2"]
-                        lmk1_pos = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk1_name ].values[0])
-                        lmk2_pos = ast.literal_eval(df_landmarks.loc[df_landmarks["file name"]==file_name, lmk2_name ].values[0])
+                        lmk1_pos = ast.literal_eval(df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, lmk1_name ].values[0])
+                        lmk2_pos = ast.literal_eval(df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, lmk2_name ].values[0])
                         alpha = row["alpha"]
                         smoothing = row["smoothing"]
                         w_line = row["w_line"]

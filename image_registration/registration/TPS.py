@@ -52,6 +52,10 @@ def TPSwarping(img, c_src, c_dst, dshape = (512,512)):
     return ndimage.map_coordinates(img, mapping , order=3)
 
 def show_warped(img, warped):
+    """
+    Used only for testing. Plots the original and warped version of the test image.
+
+    """
     fig, axs = plt.subplots(1, 2, figsize=(16,8))
     axs[0].axis('off')
     axs[1].axis('off')
