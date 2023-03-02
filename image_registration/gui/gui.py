@@ -43,7 +43,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     # Define variables shared between windows and their initial values:
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
-              'list_landmarks': None, 'drawing_line': False, 'pt_size': int(graph_canvas_width/15), 'ref_img_pt_size': 30, 'normalize': True, 
+              'list_landmarks': None, 'drawing_line': False, 'pt_size': int(graph_canvas_width/15), 
+              'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10,  
+              'edge_det_sigma_l': 50, 'edge_det_min_size': 1000, 'lmk_fine_tuning_max_dist': 30,
               'graph_width': graph_canvas_width, 'CNN_binning':10, 'CNN_augmentation': 16, 'CNN_model': None}
 
     df_files = None
@@ -231,7 +233,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == 'LM-DETECT':
             CNN_predict_landmarks(df_files, df_model, main_window, shared, values)
             df_predicted_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
-        
+                
+        if event == 'LM-FINETUNE':
+            lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files)
 
         # -------------------- keyboard shortcuts: ----------------------------
 

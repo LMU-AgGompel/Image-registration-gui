@@ -16,11 +16,15 @@ import pandas as pd
 import numpy as np
 import ast
 from ..registration.TPS import TPSwarping
-from skimage.filters import gaussian
+from skimage.filters import gaussian, threshold_otsu 
+from skimage.morphology import remove_small_objects
 from skimage.segmentation import active_contour
 from skimage.transform import resize
+from skimage import feature
 import image_registration
+from scipy.ndimage import distance_transform_edt
 from tensorflow.keras.models import load_model as Keras_load_model
+import threading
 
 file_types_dfs = [("CSV (*.csv)", "*.csv"),("All files (*.*)", "*.*")]
 
@@ -55,7 +59,7 @@ def update_image_fields(im_index, image, df_files, window, graph_canvas_width):
     ----------
     im_index : int
         index of the current image.
-    image : numpy array
+    image : PIL image
     
     df_files : pandas Dataframe
     
@@ -89,7 +93,7 @@ def update_image_view(image, window, canvas_width):
     
     Parameters
     ----------
-    image : numpy array
+    image : PIL image
         image to show on the window graph element.
     window : PySimplegui window
         window with a graph object.
@@ -739,6 +743,8 @@ def select_image(shared, df_files):
     return shared
 
 
+
+
 #
 # ------------------------- helper functions for image registration: -------------------------------  #
 #
@@ -825,7 +831,6 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             if values["-USE-PREDICTED-LMKS-"] == False:
                 # revert to just manually placed landmarks:
                 df_registration_landmarks = df_landmarks.copy()
-            
             
         if event == '-REGISTRATION-SAVE-':
             # Index for loading bar:
@@ -971,6 +976,11 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                          df_info_row = pd.DataFrame(df_info_row_data, columns=df_info_row_columns)
                          df_info = pd.concat([df_info_row, df_info])
                          dialog_box.update(value=dialog_box.get()+'\n - ' + ch_file_name + ' has been registered')
+
+                # save the info file:
+                df_info = df_info.reset_index(drop=True)
+                df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'))
+                    
 
                 # update the loading bar
                 loading_bar_i+=1
@@ -1175,8 +1185,8 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
         window.Refresh()
         
         try:
-            image_registration.predict_lm(df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name)
-            # threading.Thread(target = image_registration.predict_lm, args = (df_files, df_model, shared['CNN_model'], shared['proj_folder'], df_predicted_landmarks_name), daemon=True).start()
+            image_registration.predict_lm(df_files, df_model, shared['CNN_model'], shared['proj_folder'], normalization=True, lmk_filename = df_predicted_landmarks_name, window = window)
+            #threading.Thread(target = image_registration.predict_lm, args = (df_files, df_model, shared['CNN_model'], shared['proj_folder'], True, df_predicted_landmarks_name, window), daemon=True).start()
         except:
             window["-PRINT-"].update("An error occured during landmarks prediction.")
             
@@ -1188,6 +1198,226 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
 
     return
 
+#
+# --------------- Helper functions for fine tuning the landmarks positions: ---------  #
+#
+
+def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files):
+    
+    image = shared['curr_image']
+    canvas_size = 800
+    binning = min(image.width/canvas_size , image.height/canvas_size )
+    dim = (int(image.height/binning), int(image.width/binning))
+    image_preview = resize(np.asarray(image), dim, preserve_range=True, anti_aliasing=True).astype('uint16')
+    canvas_width =  int(shared['curr_image'].width/binning)
+    canvas_height = int(shared['curr_image'].height/binning)
+    df_registration_landmarks = df_landmarks.copy()
+
+    
+    
+    layout_graph = sg.Graph(canvas_size=(canvas_size , canvas_size), graph_bottom_left=(0, 0),
+                        graph_top_right=(canvas_size , canvas_size ), key="-GRAPH-",
+                        enable_events=True, background_color='white',
+                        drag_submits=False)
+    layout_commands = [
+                       [sg.Text('Edge detection large radius: ', size=(30, 1))], 
+                       [sg.Slider(range=(1, image.width/30), key = "-RADIUS-1-", orientation='h', size=(25, 20), default_value=shared['edge_det_sigma_l'] , enable_events=True,  disable_number_display=False)],
+                       [sg.Text('Edge detection small radius: ', size=(30, 1))],
+                       [sg.Slider(range=(1, image.width/30), key = "-RADIUS-2-", orientation='h', size=(25, 20), default_value=shared['edge_det_sigma_s'] , enable_events=True,  disable_number_display=False)],
+                       [sg.Text('Edge detection - size threshold: ', size=(30, 1))],
+                       [sg.Slider(range=(1, image.width), key = "-MIN-SIZE-", orientation='h', size=(25, 20), default_value=shared['edge_det_min_size'], enable_events=True,  disable_number_display=False)],
+                       [sg.Text('Landmarks repositioning - max distance: ', size=(40, 1))],
+                       [sg.Slider(range=(1, image.width/30), key = "-MAX-DIST-", orientation='h', size=(25, 20), default_value=shared['lmk_fine_tuning_max_dist'], enable_events=True,  disable_number_display=False)],
+                       [sg.Text('', size = (40,1))],
+                       [sg.Button("Test landmarks fine tuning", size=(30,2), key='-TEST-LMK-')],
+                       [sg.Text('', size = (40,1))],
+                       [sg.Button("Apply on all images", size=(30,2), key='-APPL-LMK-CORRECT-')],
+                       [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(60, 5))]])]
+                      ]
+    layout = [
+              [layout_graph, sg.Column(layout_commands,  vertical_alignment = 'top')]
+             ]
+    lmk_fine_tune_window = sg.Window("Fine tuning the position of predicted landmarks", layout, modal=True)
+    dialog_box = lmk_fine_tune_window["-DIALOG-"] 
+    
+    
+    while True:
+        event, values = lmk_fine_tune_window.read()
+
+        if event == "-RADIUS-1-":
+            if shared['raw_image']:
+                try:
+                    sigma_l = int(values['-RADIUS-1-']/binning)
+                    sigma_s = int(values['-RADIUS-2-']/binning)
+                    sigma_s = min(sigma_l, sigma_s)
+                    min_size = int(values['-MIN-SIZE-']/binning)
+                    shared['edge_det_sigma_l'] = values['-RADIUS-1-']
+                    
+                    edges_img = enhance_edges_2(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
+                    update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
+                except Exception as e:
+                    print(str(e))
+                    pass
+
+        if event == "-RADIUS-2-":
+            if shared['raw_image']:
+                try:
+                    sigma_l = int(values['-RADIUS-1-']/binning)
+                    sigma_s = int(values['-RADIUS-2-']/binning)
+                    sigma_s = min(sigma_l, sigma_s)
+                    min_size = int(values['-MIN-SIZE-']/binning)
+                    shared['edge_det_sigma_s'] = values['-RADIUS-2-']
+                    
+                    edges_img = enhance_edges_2(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
+                    update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
+                except Exception as e:
+                    print(str(e))
+                    pass
+                
+        if event == "-MIN-SIZE-":
+            if shared['raw_image']:
+                try:
+                    sigma_l = int(values['-RADIUS-1-']/binning)
+                    sigma_s = int(values['-RADIUS-2-']/binning)
+                    sigma_s = min(sigma_l, sigma_s)
+                    min_size = int(values['-MIN-SIZE-']/binning)
+                    shared['edge_det_min_size'] = values['-MIN-SIZE-']
+                    
+                    edges_img = enhance_edges_2(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
+                    update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
+                except Exception as e:
+                    print(str(e))
+                    pass
+        
+        if event == "-MAX-DIST-":
+            shared['lmk_fine_tuning_max_dist'] = values['-MAX-DIST-']
+            
+        if event == "-TEST-LMK-":
+            max_dist = int(values['-MAX-DIST-']/binning)
+            
+            for landmark in shared['list_landmarks']:
+                try:
+                    
+                    [x,y] = ast.literal_eval(df_predicted_landmarks.loc[df_predicted_landmarks["file name"]==shared['curr_file'], landmark].values[0])
+                    x = int(x/binning)
+                    y = int(y/binning)
+                    x_c, y_c = realign_coordinates(x, y, max_dist, edges_img)
+                    
+                    [x,y] = convert_image_coordinates_to_graph(x, y, canvas_width, canvas_height)
+                    [x_c,y_c] = convert_image_coordinates_to_graph(x_c, y_c, canvas_width, canvas_height)
+                    lmk_fine_tune_window['-GRAPH-'].draw_point((x,y), size = 10, color = 'green')
+                    lmk_fine_tune_window['-GRAPH-'].draw_point((x_c,y_c), size = 10, color = 'red')
+                 
+                except Exception as e:
+                    print(str(e))
+                    pass
+                
+        if event == "-APPL-LMK-CORRECT-":
+            fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, df_files, dialog_box)
+                
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
+    try:
+        lmk_fine_tune_window.close()  
+    except:
+        pass
+    
+    return
+
+def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, df_files, dialog_box):
+    # Get the images and their landmarks
+    file_names = df_files["file name"].unique()
+    file_count = len(file_names)
+    sigma_l = int(shared['edge_det_sigma_l'] /binning)
+    sigma_s = int(shared['edge_det_sigma_s'] /binning)
+    sigma_s = min(sigma_l, sigma_s)
+    min_size = int(shared['edge_det_min_size']/binning)
+    max_dist = int(shared['lmk_fine_tuning_max_dist']/binning)
+    dialog_box.update(value='Fine tuning of the landmarks in progress')
+    
+    # Start looping through the images to register:
+    ij = 0
+    for file_name in file_names:
+        print(ij)
+        ij+=1
+        # Open the source image:
+        file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
+        img = PIL.Image.open(file_path)
+        dim = (int(img.height/binning), int(img.width/binning))
+        img = np.asarray(img)
+        img = resize(img, dim, preserve_range=True, anti_aliasing=True).astype('uint16')
+
+        edges_img = enhance_edges_2(img, sigma_l, sigma_s, min_size)
+        
+        # Get image landmarks   
+        for landmark in shared['list_landmarks']:
+            try:
+                [x,y] = ast.literal_eval(df_predicted_landmarks.loc[df_predicted_landmarks["file name"]==file_name, landmark].values[0])
+                x = int(x/binning)
+                y = int(y/binning)
+                x_c, y_c = realign_coordinates(x, y, max_dist, edges_img)
+                x_c = x_c*binning
+                y_c = y_c*binning
+                df_predicted_landmarks.loc[df_predicted_landmarks["file name"]==file_name, landmark] = str([x_c,y_c])
+            except:
+                pass
+            
+        dialog_box.update(value=dialog_box.get()+'\n - ' + file_name + ' has been processed')
+        
+    df_predicted_landmarks.to_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
+
+    return
+
+def realign_coordinates(p_x, p_y, max_dist, img):
+   """
+   Realign coordinates to highest value pixel in area around input coordinates
+   """
+
+   p_y_n = round(p_y)
+   p_x_n = round(p_x)
+
+   "find value of all pixels around rescaled coordinates in reference image"
+   roi = img[p_y_n-max_dist:p_y_n+max_dist+1, p_x_n-max_dist:p_x_n+max_dist+1]
+   delta_y, delta_x = np.unravel_index(np.argmax(roi, axis=None), roi.shape)
+
+   "change coordinate to that with the highest value in reference image"
+   p_x_c = p_x_n-max_dist+delta_x
+   p_y_c = p_y_n-max_dist+delta_y
+   
+   return p_x_c, p_y_c
+
+def enhance_edges_2(img, smoothing_l, smoothing_s, min_size):
+    """
+    Function used to highlight the edges of an image
+    
+    Parameters
+    ----------
+    img : numpy array
+        input image.
+    smoothing_l : int
+        large smoothing radius.
+    smoothing_s : int
+        small smoothing radius.
+    Returns
+    -------
+    edges : numpy array
+        output image with enhanced edges, normalized.
+    
+    """
+    
+    edges = gaussian(img, smoothing_l, preserve_range=True) - gaussian(img, smoothing_s, preserve_range=True)
+    edges = edges > 0.5*threshold_otsu(edges)
+    edges = remove_small_objects(edges, min_size = min_size)
+    edges = gaussian(edges, (smoothing_l+smoothing_s)/2, preserve_range=False)
+    edges = edges > threshold_otsu(edges)
+    edges = distance_transform_edt(edges)
+    edges = edges / np.max(edges)
+    
+
+    return edges
 
 #
 #  ------------------  Definition of Main GUI windows ----------------------- #
@@ -1257,8 +1487,9 @@ def make_main_window(size, graph_canvas_width):
     
     image_processing_frame = [
                     [sg.Text('', size = (50,1))],
-                    [sg.Button('Automated Landmarks Detection',  size = (30,1),  key ='LM-DETECT')],
-                    [sg.Button("Registration", size = (30,1), key="-REGISTRATION-")]
+                    [sg.Button('Automated Landmarks Detection',  size = (30,2),  key ='LM-DETECT')],
+                    [sg.Button('Landmarks fine tuning',  size = (30,2),  key ='LM-FINETUNE')],
+                    [sg.Button("Registration", size = (30,2), key="-REGISTRATION-")]
                     ]
     
     

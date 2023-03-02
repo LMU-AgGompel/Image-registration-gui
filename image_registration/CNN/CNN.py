@@ -654,7 +654,7 @@ def fine_tune_CNN(X_train, y_train, X_test, y_test, CNN_model, model_path, nb_ep
     
     return
     
-def predict_lm(df_files, df_model, model, project_folder, normalization=True, lmk_filename = 'predicted_landmarks_dataframe.csv'):
+def predict_lm(df_files, df_model, model, project_folder, normalization, lmk_filename, window):
     '''
     Create a csv file with the predicted coordinates of landmarks on images using the CNN model.
     It also rescales the images to match the input size of the selected model and rescales back
@@ -683,10 +683,13 @@ def predict_lm(df_files, df_model, model, project_folder, normalization=True, lm
     images = []
     model_width = model.input_shape[2]
     model_height = model.input_shape[1]
-
+    
+    i = 0
     # importing the images, converting to grayscale and resize
     for image_name in df_files["full path"].unique():
-
+        print(i)
+        i+=1
+        window['-PRINT-'].update('Loading image '+str(i))
         image = PIL.Image.open(image_name)
         image = np.asarray(image)
         
@@ -694,7 +697,6 @@ def predict_lm(df_files, df_model, model, project_folder, normalization=True, lm
             image = image / np.mean(image[image>0])
             
         resized_image = resize(image, (model_height, model_width), preserve_range=True, anti_aliasing=True)
-        #resized = cv2.resize(image, (model_width, model_height), interpolation = cv2.INTER_AREA)
         images.append(resized_image)
 
     image_width = image.shape[1]
