@@ -87,7 +87,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 if os.path.exists( os.path.join(shared['proj_folder'], df_predicted_landmarks_name) ) :
                     df_predicted_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
                 
-                shared['ref_image'] = open_image(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
+                shared['ref_image'] = open_image_PIL(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
                 shared['im_index'] = 0
                 
                 shared['list_landmarks'] = df_model["name"].values

@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import ast
 from ..registration.TPS import TPSwarping
+from ..image_processing.image_processing import *
 from skimage.filters import gaussian, threshold_otsu 
 from skimage.morphology import remove_small_objects
 from skimage.segmentation import active_contour
@@ -154,27 +155,6 @@ def draw_landmarks_all(window, df_lmk, shared, color = "red", size = 30):
             pass
     return
 
-def open_image(image_path, normalize=True):
-    """
-    Opens the image file, converts it into 8 bit, and optionally, normalizes it 
-    
-    Parameters
-    ----------
-    image_path : str
-        path to the image.
-    normalize : bool, optional.
-
-    Returns
-    -------
-    a Pillow image.
-
-    """
-    image = PIL.Image.open(image_path)
-    image = np.asarray(image)
-    image = convert_image_to8bit(image, normalize)
-    image = PIL.Image.fromarray(image)
-    
-    return image
 
 def update_landmarks_preview(shared, window, canvas_width, normalize=True):
     """
@@ -247,7 +227,7 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     """
     
     # updated current image, raw_image and current file:
-    shared['curr_image'] = open_image(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
+    shared['curr_image'] = open_image_PIL(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
     shared['raw_image'] = shared['curr_image']
     shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]
     #shared['pt_size'] = shared['curr_image'].width / 80
@@ -292,33 +272,6 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     
     return shared, landmarks_window
 
-
-def convert_image_to8bit(image, normalize=False):
-    """
-    Helper function to convert an image in 8 bit format and, optionally, normalize it
-    
-    Parameters
-    ----------
-    image : numpy array
-    normalize : bool, optional
-        wether the image shoudl be normalized. The default is False.
-
-    Returns
-    -------
-    image : numpy array
-
-    """
-    if normalize:
-        image = image - np.min(image)
-        image = image/np.max(image)
-        image = 255*image
-    else:
-        max_val = np.iinfo(image.dtype).max
-        image = image/max_val
-        image = 255*image
-        
-    image = np.uint8(image)
-    return image
 
 def convert_image_coordinates_to_graph(x, y, im_width, im_height):
     """
@@ -1057,39 +1010,6 @@ def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
     return df_channels
 
 
-def snake_contour(img, p1_x, p1_y, p2_x, p2_y, alpha, smoothing, w_line, N = None, points_spacing = 30, binning=1):
-    distance = np.sqrt((p1_x-p2_x)**2+(p1_y-p2_y)**2)
-    n_points = N or int(distance/points_spacing)
-
-    r = np.linspace(p1_y, p2_y, n_points)/binning
-    c = np.linspace(p1_x, p2_x, n_points)/binning
-        
-    init = np.array([r, c]).T
-    img = enhance_edges(img, binning, smoothing)
-    snake = active_contour(img,
-                   init, boundary_condition='fixed', coordinates='rc', 
-                   alpha=alpha, beta=1, w_line=w_line, w_edge=0, gamma= 0.1)
-    
-    return snake*binning
-
-def rebin(img, binning):
-    width = int(img.shape[0] / binning)
-    height = int(img.shape[1] / binning)
-    dim = (width, height)
-    resized = resize(img, dim,  preserve_range=True, anti_aliasing=True)
-    return resized
-
-def enhance_edges(img, binning, smoothing):
-    img = rebin(img, binning)
-    # filtered_image = difference_of_gaussians(img, 2, 10)
-    # could use the following to avoid relying on scikit-image 0.19
-    filtered_image = gaussian(img, 10) - gaussian(img, 2)
-    filtered_image = (-filtered_image)*(filtered_image<0).astype(np.uint8)
-    filtered_image = 1 -filtered_image
-    edges = (filtered_image-np.min(filtered_image))/(np.max(filtered_image)-np.min(filtered_image))
-    edges = gaussian(edges, smoothing, preserve_range=False)
-    return edges
-
 
 #
 # ------------------------- helper functions for the CNN model: -------------------------------  #
@@ -1253,7 +1173,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     min_size = int(values['-MIN-SIZE-']/binning)
                     shared['edge_det_sigma_l'] = values['-RADIUS-1-']
                     
-                    edges_img = enhance_edges_2(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
                     update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
                 except Exception as e:
@@ -1269,7 +1189,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     min_size = int(values['-MIN-SIZE-']/binning)
                     shared['edge_det_sigma_s'] = values['-RADIUS-2-']
                     
-                    edges_img = enhance_edges_2(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
                     update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
                 except Exception as e:
@@ -1285,7 +1205,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     min_size = int(values['-MIN-SIZE-']/binning)
                     shared['edge_det_min_size'] = values['-MIN-SIZE-']
                     
-                    edges_img = enhance_edges_2(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
                     update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
                 except Exception as e:
@@ -1350,7 +1270,7 @@ def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, d
         img = np.asarray(img)
         img = resize(img, dim, preserve_range=True, anti_aliasing=True).astype('uint16')
 
-        edges_img = enhance_edges_2(img, sigma_l, sigma_s, min_size)
+        edges_img = enhance_and_extract_edges(img, sigma_l, sigma_s, min_size)
         
         # Get image landmarks   
         for landmark in shared['list_landmarks']:
@@ -1388,36 +1308,6 @@ def realign_coordinates(p_x, p_y, max_dist, img):
    p_y_c = p_y_n-max_dist+delta_y
    
    return p_x_c, p_y_c
-
-def enhance_edges_2(img, smoothing_l, smoothing_s, min_size):
-    """
-    Function used to highlight the edges of an image
-    
-    Parameters
-    ----------
-    img : numpy array
-        input image.
-    smoothing_l : int
-        large smoothing radius.
-    smoothing_s : int
-        small smoothing radius.
-    Returns
-    -------
-    edges : numpy array
-        output image with enhanced edges, normalized.
-    
-    """
-    
-    edges = gaussian(img, smoothing_l, preserve_range=True) - gaussian(img, smoothing_s, preserve_range=True)
-    edges = edges > 0.5*threshold_otsu(edges)
-    edges = remove_small_objects(edges, min_size = min_size)
-    edges = gaussian(edges, (smoothing_l+smoothing_s)/2, preserve_range=False)
-    edges = edges > threshold_otsu(edges)
-    edges = distance_transform_edt(edges)
-    edges = edges / np.max(edges)
-    
-
-    return edges
 
 #
 #  ------------------  Definition of Main GUI windows ----------------------- #
