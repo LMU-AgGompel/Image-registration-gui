@@ -509,3 +509,169 @@ def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts,
     pts = pts + [y0, x0]
     
     return pts
+
+def check_orientation(landmarks, landmarks_ref):
+    """
+    Check if the orientation of a set of landmarks is flipped relative to a reference set.
+
+    Parameters:
+        landmarks (dict): Dictionary of landmarks where keys represent landmark names
+                          and values are [y, x] coordinates.
+        landmarks_ref (dict): Reference dictionary of landmarks for comparison.
+
+    Returns:
+        bool: True if the orientation is flipped, False otherwise.
+
+    The function checks if the orientation of landmarks in 'landmarks' is flipped
+    relative to a reference set of landmarks in 'landmarks_ref'. It computes vectors
+    between three key landmarks and determines if the cross products of these vectors
+    have opposite signs, indicating a flip in orientation.
+    """
+
+    if len(landmarks) < 3:
+        raise ValueError("Not enough landmark points to check the orientation")
+    
+    LMs = list(landmarks.keys())
+    
+    v1 = np.array(landmarks[LMs[1]]) - np.array(landmarks[LMs[0]])
+    v2 = np.array(landmarks[LMs[2]]) - np.array(landmarks[LMs[0]])
+    
+    v1_ref = np.array(landmarks_ref[LMs[1]]) - np.array(landmarks_ref[LMs[0]])
+    v2_ref = np.array(landmarks_ref[LMs[2]]) - np.array(landmarks_ref[LMs[0]])
+    
+    flipped = (np.cross(v1, v2) * np.cross(v1_ref, v2_ref) < 0)
+    
+    return flipped
+
+def fit_multiple_contours_model(image, landmarks_dict, landmarks_ref_dict, multiple_contours_model, plot=False):
+    """
+    Fit multiple contours on an image using a predefined model.
+
+    Parameters:
+        image (numpy.ndarray): The input image as a 2D numpy array.
+        landmarks_dict (dict): Dictionary of landmarks where keys represent landmark names
+                               and values are [y, x] coordinates.
+        landmarks_ref_dict (dict): Dictionary of reference landmarks for orientation check.
+        multiple_contours_model (pandas.DataFrame): DataFrame containing the contour model.
+        plot (bool): Whether to visualize the contours on the image. Default is False.
+
+    Returns:
+        tuple: A tuple containing two dictionaries. The first dictionary contains floating landmarks,
+               and the second dictionary contains all contour points.
+
+    The function iterates through the rows of 'multiple_contours_model', where each row represents
+    a contour to fit. For each contour, it performs the following steps:
+    1. Bins, normalizes, and extracts edges from the image based on model parameters.
+    2. Fits an active contour to the energy image using specified landmarks and model parameters.
+    3. Optionally visualizes the fitted contour on the image.
+
+    If 'plot' is True, the function will display the image with fitted contours.
+
+    Note: This function assumes that you have imported 'matplotlib.colors as mcolors'.
+
+    """
+
+    prev_binning = 1
+    prev_l_smoothing = 1
+    prev_s_smoothing = 1
+    prev_min_size = 1
+    image_binned = image
+    image_edges = image
+    energy = image
+    floating_landmarks = {}
+    all_contours = {}
+    
+    flipping = check_orientation(landmarks_dict, landmarks_ref_dict)
+    
+    if plot:
+        plt.imshow(energy)
+        # Get a list of distinct colors for plotting multiple contours
+        colors = list(mcolors.TABLEAU_COLORS.values())[:len(multiple_contours_model)]
+    
+    for idx, model in multiple_contours_model.iterrows():
+        
+        binning = model["binning"]
+        
+        if binning != prev_binning:
+            image_binned = bin_normalize_smooth(image, binning)
+            prev_binning = binning
+            
+        large_scale_smoothing = int(model["edge_large_lengthscale"] / binning)
+        small_scale_smoothing = int(model["edge_small_lengthscale"] / binning)
+        min_object_size = int(model["edge_size_threshold"] / (binning**2))   
+        
+        if ((prev_l_smoothing != large_scale_smoothing)
+            or (prev_s_smoothing != small_scale_smoothing)
+            or (prev_min_size != min_object_size)):
+
+            image_edges = enhance_and_extract_edges(image_binned,
+                          large_scale_smoothing, small_scale_smoothing, min_object_size)
+            image_edges = gaussian(image_edges, large_scale_smoothing,
+                           mode='constant', cval=0.0, truncate=10)
+            
+            energy = image_edges**2
+            
+            prev_l_smoothing = large_scale_smoothing
+            prev_s_smoothing = small_scale_smoothing
+            prev_min_size = min_object_size
+            
+        p_start = landmarks_dict[model["contour_start"]]/ binning
+        p_end = landmarks_dict[model["contour_end"]]/ binning
+        
+        pts_relative_prior_x = np.array(ast.literal_eval(model["pts_prior_x"]))
+        pts_relative_prior_y = np.array(ast.literal_eval(model["pts_prior_y"]))
+        pts_relative_prior = np.array([pts_relative_prior_y, pts_relative_prior_x]).T
+        
+        energy_alpha = model["energy_alpha"]
+        contour_spacing = int(model["contour_spacing"] / binning)
+        
+        contour_pts = binning * fit_active_contour(energy, p_start, p_end, pts_relative_prior,
+                                         flipping, energy_alpha, contour_spacing)
+        
+        n_equispaced_points = model["n_points"]
+        equispaced_pts = find_equispaced_points_along_curve_with_spline(contour_pts, n_equispaced_points)
+        
+        for point_idx, point in enumerate(equispaced_pts):
+            landmark_name = model["contour_start"] + "--" + model["contour_end"]+"_"+str(point_idx)
+            floating_landmarks[landmark_name] = point
+        
+        all_contours[model["contour_start"] + "--" + model["contour_end"]] = contour_pts
+            
+        if plot:
+            # Plot fitted contours and equispaced points using distinct colors
+            plt.scatter(contour_pts[:, 1], contour_pts[:, 0], c=colors[idx], s=5)
+            plt.scatter(equispaced_pts[:, 1], equispaced_pts[:, 0], c=colors[idx], s=30)     
+        
+    return floating_landmarks, all_contours
+
+def find_equispaced_points_along_curve_with_spline(curve_points, n_equispaced_points):
+    """
+    Find equispaced points along a curve defined by control points using a spline interpolation.
+    
+    Parameters:
+        curve_points (numpy.ndarray): Control points defining the curve as a 2D numpy array.
+                                      Each row represents a point with [y, x] coordinates.
+        n_equispaced_points (int): The desired number of equispaced points along the curve.
+    
+    Returns:
+        numpy.ndarray: Equispaced points sampled along the curve as a 2D numpy array.
+    
+    The function performs the following steps:
+    1. Determines the cumulative length along the curve based on the provided control points.
+    2. Creates a spline interpolation based on the cumulative distance and curve points.
+    3. Uses the spline to find uniformly spaced points along the curve.
+    The equispaced points are returned as a 2D numpy array.
+    """
+    #Determine cumulative length along the curve:
+    differences = np.diff(curve_points, axis=0)
+    distances = (differences[:,1]**2+differences[:,0]**2)**0.5
+    distances = np.append([0],distances)
+    cumu_dist = np.cumsum(distances)
+    
+    #Create spline based on curve points
+    spline = make_interp_spline(cumu_dist/np.max(cumu_dist), curve_points)
+    
+    #Use spline to find uniformly spaced points:
+    equispaced_points = spline(np.linspace(0, 1, n_equispaced_points))
+
+    return equispaced_points
