@@ -39,11 +39,15 @@ df_landmarks_name = "landmarks_dataframe.csv"
 
 df_model_name = "model_dataframe.csv"
 
+df_contour_model_name = "contour_model_dataframe.csv"
+
 df_channels_name = "extra_channels_dataframe.csv"
 
 ref_image_name = "reference_image.tif"
 
 df_predicted_landmarks_name = "predicted_landmarks_dataframe.csv"
+
+df_floating_landmarks_name = "floating_landmarks_dataframe.csv"
 
 
 #
@@ -892,7 +896,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 warped = TPSwarping(img, c_src, c_dst, warped_shape)
                 
                 # Resize the image according to the slider value
-                size = warped.shape*np.array([values['-REGISTRATION-RESOLUTION-']/100,values['-REGISTRATION-RESOLUTION-']/100])
+                size = warped.shape*np.array([values['-REGISTRATION-RESOLUTION-']/100, values['-REGISTRATION-RESOLUTION-']/100])
                 size = [int(x) for x in size]
                 warped = resize(warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
                 
@@ -1310,6 +1314,59 @@ def realign_coordinates(p_x, p_y, max_dist, img):
    return p_x_c, p_y_c
 
 #
+#  ----------  Helper functions for detection of floating landmarks ---------- #
+#
+
+def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_landmarks, df_predicted_landmarks = None):
+    
+    # Get the reference image and its landmarks:
+    reference_image = open_image_numpy(os.path.join(shared['proj_folder'], ref_image_name))
+    landmarks_ref_dict = dict(zip(df_model["name"], df_model["target"]))
+    
+    for lm_key in landmarks_ref_dict.keys():
+        landmarks_ref_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_ref_dict[lm_key])))
+        
+    df_ref_floating_lmks = pd.DataFrame(landmarks_ref_dict)
+    shared['ref_floating_lmks'] = df_ref_floating_lmks
+    
+    # Get the images and their landmarks
+    file_names = df_files["file name"].unique()
+    
+    # Merge manual landmarks and predicted landmarks:
+    df_all_landmarks = df_landmarks.copy()
+    if df_predicted_landmarks:
+        df_all_landmarks.update(df_predicted_landmarks, overwrite=False)
+
+    # Start looping through the images to register:
+    all_floating_lmks = []
+    
+    for file_name in file_names:
+        
+        # Open the image:
+        file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
+        img = open_image_numpy(file_path)
+        
+        # Load the manual landmark positions:
+        landmarks_dict = df_all_landmarks.query("`file name` == @file_name").drop(columns = ["file name"]).to_dict(orient='records')[0]
+        
+        for lm_key in landmarks_dict.keys():
+            landmarks_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_dict[lm_key])))
+            
+        # Predict the floating landmarks:
+        floating_lmks, contours = fit_multiple_contours_model(img, landmarks_dict, landmarks_ref_dict, df_contours_model, plot = True)
+        
+        # Save the floating landmarks:
+        floating_lmks_temp_df = pd.DataFrame(floating_lmks)
+        floating_lmks_temp_df['file name'] = file_name
+        all_floating_lmks.append(floating_lmks_temp_df)
+    
+    df_floating_landmarks = pd.concat(all_floating_lmks, ignore_index = True)
+    df_floating_landmarks.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+        
+    return shared
+
+
+#
 #  ------------------  Definition of Main GUI windows ----------------------- #
 #
 
@@ -1379,6 +1436,7 @@ def make_main_window(size, graph_canvas_width):
                     [sg.Text('', size = (50,1))],
                     [sg.Button('Automated Landmarks Detection',  size = (30,2),  key ='LM-DETECT')],
                     [sg.Button('Landmarks fine tuning',  size = (30,2),  key ='LM-FINETUNE')],
+                    [sg.Button("Automated Floating Landmarks", size = (30,2), key="LM-FLOATING")],
                     [sg.Button("Registration", size = (30,2), key="-REGISTRATION-")]
                     ]
     

@@ -46,7 +46,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
               'list_landmarks': None, 'drawing_line': False, 'pt_size': int(graph_canvas_width/15), 
               'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10,  
               'edge_det_sigma_l': 50, 'edge_det_min_size': 1000, 'lmk_fine_tuning_max_dist': 30,
-              'graph_width': graph_canvas_width, 'CNN_binning':10, 'CNN_augmentation': 16, 'CNN_model': None}
+              'graph_width': graph_canvas_width, 'CNN_binning':10,
+              'CNN_augmentation': 16, 'CNN_model': None, 'ref_floating_lmks':None}
 
     df_files = None
     df_landmarks = None
@@ -236,6 +237,12 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 
         if event == 'LM-FINETUNE':
             lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files)
+            
+        if event == 'LM-FLOATING':
+            df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
+            shared = floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_landmarks)
+            df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name), index= False)
+               
 
         # -------------------- keyboard shortcuts: ----------------------------
 

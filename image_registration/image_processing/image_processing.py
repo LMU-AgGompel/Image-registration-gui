@@ -15,6 +15,10 @@ from skimage.filters import threshold_otsu
 from skimage.filters import gaussian
 from skimage.morphology import remove_small_objects
 from scipy.ndimage import distance_transform_edt
+from scipy.interpolate import make_interp_spline
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+import ast
 
 def rebin(img, binning):
     """
@@ -660,7 +664,9 @@ def find_equispaced_points_along_curve_with_spline(curve_points, n_equispaced_po
     1. Determines the cumulative length along the curve based on the provided control points.
     2. Creates a spline interpolation based on the cumulative distance and curve points.
     3. Uses the spline to find uniformly spaced points along the curve.
+    
     The equispaced points are returned as a 2D numpy array.
+    
     """
     #Determine cumulative length along the curve:
     differences = np.diff(curve_points, axis=0)
@@ -672,6 +678,6 @@ def find_equispaced_points_along_curve_with_spline(curve_points, n_equispaced_po
     spline = make_interp_spline(cumu_dist/np.max(cumu_dist), curve_points)
     
     #Use spline to find uniformly spaced points:
-    equispaced_points = spline(np.linspace(0, 1, n_equispaced_points))
+    equispaced_points = spline(np.linspace(0, 1, n_equispaced_points+2, endpoint = True))
 
-    return equispaced_points
+    return equispaced_points[1:-1]

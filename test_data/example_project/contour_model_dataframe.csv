@@ -1,0 +1,3 @@
+contour_start,contour_end,pts_prior_x,pts_prior_y,edge_large_lengthscale,edge_small_lengthscale,edge_size_threshold,energy_alpha,contour_spacing,binning,n_points
+A2_apex,LV5-end,"[417, 378, 301, 229]","[280, 334, 354, 345]",30,5,1000,0.1,100,10,5
+LV3-ACV,LV3-end,"[333, 194, 77]","[245, 231, 243]",30,5,1000,0.1,100,10,4
