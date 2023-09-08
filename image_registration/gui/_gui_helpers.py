@@ -49,6 +49,7 @@ df_predicted_landmarks_name = "predicted_landmarks_dataframe.csv"
 
 df_floating_landmarks_name = "floating_landmarks_dataframe.csv"
 
+df_ref_floating_landmarks_name = "reference_floating_landmarks_dataframe.csv"
 
 #
 # ------ helper functions for the graph object and image  visualization ----- #
@@ -443,7 +444,7 @@ def create_new_project():
             
             df_files = df_files.drop_duplicates(subset='file name', keep="first")
             
-            df_files.to_csv(os.path.join(project_folder, df_files_name))
+            #df_files.to_csv(os.path.join(project_folder, df_files_name))
             df_files.to_csv(os.path.join(project_folder, df_files_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names created.')
             
@@ -458,7 +459,7 @@ def create_new_project():
             
             new_model_path = values['-NEW-MODEL-FILE-']
             df_model = pd.read_csv(new_model_path)
-            df_model.to_csv(os.path.join(project_folder, df_model_name))
+            #df_model.to_csv(os.path.join(project_folder, df_model_name))
             df_model.to_csv(os.path.join(project_folder, df_model_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe with model information copied in the project folder.')
             
@@ -468,7 +469,7 @@ def create_new_project():
                 for landmark in landmark_names:
                     df_landmarks[landmark] = np.nan
                 
-                df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+                #df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
                 df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index=False)
                 dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates created.')
             except:
@@ -737,12 +738,10 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
               [sg.Text('Target folder for registered images: ', size=(30, 1)), 
                sg.Input(size=(30,1), enable_events=True, key='-REGISTERED-IMAGES-FOLDER-'),
                sg.FolderBrowse()],
-              [sg.Text('Snake model file: ', size=(30, 1)), 
-               sg.Input(size=(30,1), enable_events=True, key='-SNAKE-MODEL-'),
-               sg.FileBrowse()],
               [sg.Text('Image resolution of registered images (%):',size=(38,1)),
               sg.Slider(orientation ='horizontal', key='-REGISTRATION-RESOLUTION-', range=(1,100),default_value=100)],
               [sg.Checkbox('Include predicted landmarks?', key="-USE-PREDICTED-LMKS-", default=False, enable_events=True)],
+              [sg.Checkbox('Include floating landmarks?', key="-USE-FLOATING-LMKS-", default=False, enable_events=True)],
               [sg.Checkbox('Apply the registration to additional channels?', key="-MULTI-CHANNEL-", default=False, enable_events=True)],
               [sg.Text("List all folders where to search images corresponding to additional channels:", visible=False, key="-TEXT-CH-")],
               [sg.Multiline(enter_submits=False,  size = (60,5), key='-EXTRA-CHANNELS-FOLDERS-', autoscroll=True, visible=False, do_not_clear=True)],
@@ -757,8 +756,10 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
     registration_window = sg.Window("Registration of the annotated images", layout, modal=True)
 
     dialog_box = registration_window["-DIALOG-"]
-    df_registration_landmarks = df_landmarks.copy() 
-    df_snake = None
+    df_registration_landmarks = df_landmarks.copy()
+    df_floating_landmarks = None
+    df_ref_floating_landmarks = None
+    floating_landmarks_names = None
     
     while True:
         event, values = registration_window.read()
@@ -776,10 +777,19 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 registration_window.Element('-EXTRA-CHANNELS-FOLDERS-').Update(visible=False)
                 registration_window.Element('-TEXT-CH2-').Update(visible=False)
                 registration_window.Element('-REFERENCE-CHANNEL-').Update(visible=False)
-          
-        if event == '-SNAKE-MODEL-':
-            df_snake = pd.read_csv(values['-SNAKE-MODEL-'])       
 
+        if event == '-USE-FLOATING-LMKS-':
+            if values["-USE-FLOATING-LMKS-"] == True:
+                df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+                df_ref_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_ref_floating_landmarks_name))
+                floating_landmarks_names = list(df_ref_floating_landmarks.columns)
+                
+            if values["-USE-FLOATING-LMKS-"] == False:
+                # revert to just manually placed landmarks:
+                df_floating_landmarks = None
+                df_ref_floating_landmarks = None
+                floating_landmarks_names = None
+                
         if event == '-USE-PREDICTED-LMKS-':
             if values["-USE-PREDICTED-LMKS-"] == True:
                 # fill non defined landmarks using predicted landmarks
@@ -794,36 +804,24 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             loading_bar_i=0   
             dialog_box.update(value='Registration started, this may take a while..')
             
-            # Getting reference landmarks
-            c_dst=[]
+            # Getting principal landmarks for the referece image:
+            target_image_pts = []
             landmarks_list = df_model["name"].values
             
             for landmark in shared['list_landmarks']:
                 [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
-                c_dst.append([x,y])
+                target_image_pts.append([x,y])
 
-            # Getting snake landmarks for reference
-            if df_snake is not None:
-                df_snake["N_points"] = 0
-                ref_image = PIL.Image.open(os.path.join(shared['proj_folder'], ref_image_name))
-                ref_image = np.asarray(ref_image)
-                
-                for index, row in df_snake.iterrows():
-                    # get the positions of the two landmarks in target image:
-                    lmk1_name, lmk2_name  = row["Lmk1"], row["Lmk2"]
-                    lmk1_pos = ast.literal_eval(df_model.loc[df_model["name"]==lmk1_name, "target"].values[0])
-                    lmk2_pos = ast.literal_eval(df_model.loc[df_model["name"]==lmk2_name, "target"].values[0])
-                    alpha = row["alpha"]
-                    smoothing = row["smoothing"]
-                    w_line = row["w_line"]
-                    
-                    snk = snake_contour(ref_image, lmk1_pos[1], lmk1_pos[0], lmk2_pos[1], lmk2_pos[0], alpha, smoothing, w_line)
-                    df_snake.loc[index,"N_points"] = len(snk)            
-                    c_dst.extend(snk[1:-1].tolist())
+            # Getting the floating landmarks for the reference image:
+            if df_floating_landmarks is not None:
+
+                for fl_lmk in floating_landmarks_names:
+                    [x,y] = ast.literal_eval(df_ref_floating_landmarks[fl_lmk].values[0])
+                    target_image_pts.append([x,y])
     
-            c_dst = np.reshape(c_dst,(len(c_dst),2))
-            shape_dst = np.asarray(shared['ref_image'].size)
-            c_dst = c_dst/shape_dst
+            target_image_pts = np.reshape(target_image_pts,(len(target_image_pts),2))
+            target_shape = np.asarray(shared['ref_image'].size)
+            target_image_pts = target_image_pts/target_shape
             
             # Get the images and their landmarks
             file_names = df_files["file name"].unique()
@@ -852,48 +850,35 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 img = np.asarray(img)
                 shape_src = np.asarray(img.shape)
                 
-                # Get image landmarks
-                c_src=[]
+                # Getting principal landmarks:
+                source_image_pts=[]
  
                 for LM in landmarks_list:
                     try:
-                        LM_position = df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, LM].values[0]
-                        c_src.append(ast.literal_eval(LM_position))
+                        [x, y] = ast.literal_eval(df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, LM].values[0])
+                        source_image_pts.append([x, y])
                     except:
                         pass
                 
-                # Check if some landmarks are missing, and skip the image
-                if len(c_src) != len(landmarks_list):
+                # Check if some landmarks are missing, and skip the image:
+                if len(source_image_pts) != len(landmarks_list):
                     loading_bar_i+=1
                     continue 
                 
-                # Get snake image landmarks
-                if df_snake is not None:
-                    # binning:
-                    binning = np.max([1, np.round( max(shape_src)/max(shape_dst) )])
-                    for index, row in df_snake.iterrows():
-                        # get the positions of the two landmarks in target image:
-                        lmk1_name = row["Lmk1"]
-                        lmk2_name = row["Lmk2"]
-                        lmk1_pos = ast.literal_eval(df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, lmk1_name ].values[0])
-                        lmk2_pos = ast.literal_eval(df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, lmk2_name ].values[0])
-                        alpha = row["alpha"]
-                        smoothing = row["smoothing"]
-                        w_line = row["w_line"]
-                        N = row["N_points"]
-                        snk = snake_contour(img, lmk1_pos[1], lmk1_pos[0], lmk2_pos[1], lmk2_pos[0], alpha, smoothing, w_line, N=N, binning=binning)
-                        c_src.extend(snk[1:-1].tolist())
+                # Getting floating landmarks:
+                if df_floating_landmarks is not None:
 
-                np.reshape(c_src,(len(c_src),2))
-                
-        
-       
-                c_src = c_src/np.asarray([img.shape[1], img.shape[0]])
+                    for fl_lmk in floating_landmarks_names:
+                        [x,y] = ast.literal_eval(df_floating_landmarks.loc[df_floating_landmarks["file name"]==file_name, fl_lmk].values[0])
+                        source_image_pts.append([x,y])
+                        
+                source_image_pts = np.reshape(source_image_pts,(len(source_image_pts),2))
+                source_image_pts = source_image_pts/np.asarray([img.shape[1], img.shape[0]])
                 
                 # Apply tps, the aspect ratio of the warped image is the same as the target image but with the resolution
                 # of the source image.
-                warped_shape = tuple( (shape_dst*max(shape_src)/max(shape_dst)).astype(int) )
-                warped = TPSwarping(img, c_src, c_dst, warped_shape)
+                warped_shape = tuple( (target_shape*max(shape_src)/max(target_shape)).astype(int) )
+                warped = TPSwarping(img, source_image_pts, target_image_pts, warped_shape)
                 
                 # Resize the image according to the slider value
                 size = warped.shape*np.array([values['-REGISTRATION-RESOLUTION-']/100, values['-REGISTRATION-RESOLUTION-']/100])
@@ -924,7 +909,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                          ch_file_name = os.path.basename(ch_file_path)
                          ch_img = PIL.Image.open(ch_file_path)
                          ch_img = np.asarray(ch_img)
-                         ch_warped = TPSwarping(ch_img, c_src, c_dst, warped_shape)
+                         ch_warped = TPSwarping(ch_img, source_image_pts, target_image_pts, warped_shape)
                          ch_warped = resize(ch_warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
                          ch_destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], ch_file_name)
                          ch_warped_PIL = PIL.Image.fromarray(ch_warped)
@@ -1323,11 +1308,17 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
     reference_image = open_image_numpy(os.path.join(shared['proj_folder'], ref_image_name))
     landmarks_ref_dict = dict(zip(df_model["name"], df_model["target"]))
     
+    
     for lm_key in landmarks_ref_dict.keys():
         landmarks_ref_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_ref_dict[lm_key])))
-        
-    df_ref_floating_lmks = pd.DataFrame(landmarks_ref_dict)
-    shared['ref_floating_lmks'] = df_ref_floating_lmks
+
+    # Predict the floating landmarks for the reference image:
+    floating_ref_lmks, contours = fit_multiple_contours_model(reference_image, landmarks_ref_dict, landmarks_ref_dict, df_contours_model, plot = False)
+    floating_ref_lmks = {key: str([value[1], value[0]]) for key, value in floating_ref_lmks.items()}
+
+    df_ref_floating_lmks = pd.DataFrame(floating_ref_lmks, index=[0])
+    
+    df_ref_floating_lmks.to_csv(os.path.join(shared['proj_folder'], df_ref_floating_landmarks_name), index=False)
     
     # Get the images and their landmarks
     file_names = df_files["file name"].unique()
@@ -1353,15 +1344,17 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
             landmarks_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_dict[lm_key])))
             
         # Predict the floating landmarks:
-        floating_lmks, contours = fit_multiple_contours_model(img, landmarks_dict, landmarks_ref_dict, df_contours_model, plot = True)
+        floating_lmks, contours = fit_multiple_contours_model(img, landmarks_dict, landmarks_ref_dict, df_contours_model, plot = False)
         
         # Save the floating landmarks:
-        floating_lmks_temp_df = pd.DataFrame(floating_lmks)
+        floating_lmks = {key: str([value[1], value[0]]) for key, value in floating_lmks.items()}
+
+        floating_lmks_temp_df = pd.DataFrame(floating_lmks, index=[0])
         floating_lmks_temp_df['file name'] = file_name
         all_floating_lmks.append(floating_lmks_temp_df)
     
     df_floating_landmarks = pd.concat(all_floating_lmks, ignore_index = True)
-    df_floating_landmarks.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+    df_floating_landmarks.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name), index=False)
         
     return shared
 

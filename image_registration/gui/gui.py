@@ -228,8 +228,6 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
             image_registration.training_data_preprocessing(train_folder, val_folder, df_landmarks, df_files, df_model, n_augment, binning, test_size=0.2, normalization=True)
             CNN_fine_tune(main_window, train_folder, val_folder, df_model, shared, values)
-           
-
 
         if event == 'LM-DETECT':
             CNN_predict_landmarks(df_files, df_model, main_window, shared, values)
@@ -239,10 +237,10 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files)
             
         if event == 'LM-FLOATING':
+            main_window["-PRINT-"].update("** Predicting floating landmarks in progress **")
             df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
             shared = floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_landmarks)
-            df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name), index= False)
-               
+            main_window["-PRINT-"].update("** Prediction of floating landmarks completed **")
 
         # -------------------- keyboard shortcuts: ----------------------------
 
