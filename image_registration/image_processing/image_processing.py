@@ -457,7 +457,7 @@ def position_starting_points_active_contour(pts_ref, p_start, p_end, flip_pts = 
     return transformed_pts_ref
 
 def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts, 
-                       alpha, spacing, 
+                       alpha, rel_spacing, 
                        options={'maxiter': 200, 'gtol':0.01, 'eps':0.01},
                        method='CG'):
     """
@@ -470,7 +470,7 @@ def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts,
         pts_relative_prior (numpy.ndarray): Relative positions of prior points as a 2D numpy array.
         flip_pts (bool): Whether to flip the prior points horizontally.
         alpha (float): Weight parameter for the energy term in the optimization.
-        spacing (float): Desired spacing between points along the contour.
+        rel_spacing (float): Desired spacing between points along the contour.
         options (dict): Optimization options (default values provided).
         method (str): Optimization method to use (default is 'CG').
 
@@ -490,7 +490,7 @@ def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts,
     cumul_dist = np.cumsum(point_distances)
     cumul_dist = np.insert(cumul_dist, 0, 0)
     tot_length = np.sum(point_distances)
-    n_points = int(tot_length / spacing)
+    n_points =  round(1/rel_spacing)
     new_x = np.interp(np.arange(int(n_points + 1)) * (cumul_dist[-1]) / n_points, cumul_dist, pts[:, 0])
     new_y = np.interp(np.arange(int(n_points + 1)) * (cumul_dist[-1]) / n_points, cumul_dist, pts[:, 1])
     pts = np.array([new_x, new_y]).T
@@ -627,10 +627,10 @@ def fit_multiple_contours_model(image, landmarks_dict, landmarks_ref_dict, multi
         pts_relative_prior = np.array([pts_relative_prior_y, pts_relative_prior_x]).T
         
         energy_alpha = model["energy_alpha"]
-        contour_spacing = int(model["contour_spacing"] / binning)
+        rel_spacing = model["contour_rel_spacing"]
         
         contour_pts = binning * fit_active_contour(energy, p_start, p_end, pts_relative_prior,
-                                         flipping, energy_alpha, contour_spacing)
+                                         flipping, energy_alpha, rel_spacing)
         
         n_equispaced_points = model["n_points"]
         equispaced_pts = find_equispaced_points_along_curve_with_spline(contour_pts, n_equispaced_points)
