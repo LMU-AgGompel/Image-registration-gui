@@ -1466,7 +1466,6 @@ def make_main_window(size, graph_canvas_width):
                                 enable_events=False,
                                 drag_submits=False,
                                 background_color='white')],
-                         [sg.Checkbox('Draw Line', default = False, font = 'Arial 18', key='-LINE-',  enable_events=True)],
                          [sg.Button("Save changes to the project", key="-SAVE-", size=(30,3), font = 'Arial 12')]
                          ]
        

@@ -43,7 +43,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     # Define variables shared between windows and their initial values:
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
-              'list_landmarks': None, 'drawing_line': False, 'pt_size': int(graph_canvas_width/15), 
+              'list_landmarks': None, 'pt_size': int(graph_canvas_width/15), 
               'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10,  
               'edge_det_sigma_l': 50, 'edge_det_min_size': 1000, 'lmk_fine_tuning_max_dist': 30,
               'graph_width': graph_canvas_width, 'CNN_binning':10,
@@ -321,38 +321,18 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             # refresh the graph to remove previous points:
             if shared['curr_image']:
                 update_image_view(shared['curr_image'], main_window, graph_canvas_width)
-            
-                if values['-LINE-']:
-                    if not shared['drawing_line']:
-                        (x1,y1) = (x, y)
-                        shared['drawing_line'] = True
-                    else:
-                        (x2, y2) = (x, y)
-                        if x2==x1:
-                            x2+=1
-                        m = (y2-y1)/(x2-x1)
-                        q = y1-m*x1
-                        if m<0:
-                            main_window['-GRAPH-'].draw_line((0,q), (-q/m, 0), width=4)
-                        elif m>0:
-                            main_window['-GRAPH-'].draw_line((shared['curr_image'].width,m*shared['curr_image'].width+q), (-q/m, 0), width=4)
-                        else:
-                            main_window['-GRAPH-'].draw_line((shared['curr_image'].width,m*shared['curr_image'].width+q), (0, q), width=4)
-                        
-                        shared['drawing_line'] = False
+
+                # draw a dot on the graph
+                main_window['-GRAPH-'].draw_point((x,y), size = shared['pt_size'], color = "red")
+                
+                # if a landmark was selected in the landmark window we store the new position in the
+                # corresponding dataframe:
                     
-                else:
-                    # draw a dot on the graph
-                    main_window['-GRAPH-'].draw_point((x,y), size = shared['pt_size'], color = "red")
+                if shared['curr_landmark']:
+                    [x,y] = convert_graph_coordinates_to_image(x, y, shared['curr_image'].width, shared['curr_image'].height)
+                    main_window["-PRINT-"].update('Position of landmark '+shared['curr_landmark']+' set to: ' + str([x, y]))
+                    df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], shared['curr_landmark']] = str([x,y])
                     
-                    # if a landmark was selected in the landmark window we store the new position in the
-                    # corresponding dataframe:
-                        
-                    if shared['curr_landmark']:
-                        [x,y] = convert_graph_coordinates_to_image(x, y, shared['curr_image'].width, shared['curr_image'].height)
-                        main_window["-PRINT-"].update('Position of landmark '+shared['curr_landmark']+' set to: ' + str([x, y]))
-                        df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], shared['curr_landmark']] = str([x,y])
-                        
 
         
         # ------ events related to elements of the landmarks window -----------
