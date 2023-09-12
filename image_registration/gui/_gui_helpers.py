@@ -1492,7 +1492,7 @@ def make_main_window(size, graph_canvas_width):
     return sg.Window("Image Annotation Tool", layout, size=size, finalize=True, return_keyboard_events=True)
 
 
-def make_landmarks_window(model_df, landmarks_df, current_filename, location = (1200,100), size = (300,1200)):
+def make_landmarks_window(model_df, landmarks_df, current_filename, location = (1200,100), size = (300,900)):
     """
     Function used to create the extra window with buttons used to select the 
     various landmarks. The window is created only when a project is open and is 
@@ -1529,13 +1529,18 @@ def make_landmarks_window(model_df, landmarks_df, current_filename, location = (
             landmarks_buttons_colors.append("FloralWhite") 
         else:
             landmarks_buttons_colors.append("SteelBlue3")     
-        
-    layout = [[sg.Text('Select landmark: ', size=(20, 1))],
-              *[[sg.Button(LM, size=(20, 1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
-              [sg.Button("Show all landmarks", size = (20,1), key = "-SHOW-ALL-")],
-              [sg.Button("Delete current Landmark", size = (20,1), key = "-DELETE_LDMK-", button_color = ("black", "orange"))],
-             ]
+
+    scrollable_column = [
+        [sg.Text('Select landmark: ', size=(20, 1))],
+         *[[sg.Button(LM, size=(20,1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
+        [sg.Button("Show all landmarks", size = (20,1), key = "-SHOW-ALL-")],
+        [sg.Button("Delete current Landmark", size = (20,1), key = "-DELETE_LDMK-", button_color = ("black", "orange"))],
+        ]     
     
+    layout = [
+        [sg.Column(scrollable_column, scrollable=True,  vertical_scroll_only=True, expand_x = True, expand_y = True)],
+        ]
+
     return sg.Window("Landmark selection", layout, size=size, finalize=True, location = location)
 
 def mouse_click_callback(event, window):
