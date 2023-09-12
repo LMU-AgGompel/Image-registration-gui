@@ -44,7 +44,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
               'list_landmarks': None, 'pt_size': int(graph_canvas_width/15), 
-              'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10,  
+              'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10, 
+              'show_all': False, 'show_floating':False,
               'edge_det_sigma_l': 50, 'edge_det_min_size': 1000, 'lmk_fine_tuning_max_dist': 30,
               'graph_width': graph_canvas_width, 'CNN_binning':10,
               'CNN_augmentation': 16, 'CNN_model': None, 'ref_floating_lmks':None}
@@ -131,6 +132,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared['im_index'] += 1
                 shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
                 
+                
         if event == "Previous":
             if  (df_files is not None) and (shared['im_index']>0):
                 shared['im_index'] -= 1
@@ -171,6 +173,22 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared['curr_image'] = PIL.Image.fromarray(shared['curr_image'])
                 update_image_view(shared['curr_image'], main_window, graph_canvas_width)
 
+        if event == "-ALL-LANDMARKS-":
+            if values['-ALL-LANDMARKS-'] == True:
+                shared['show_all'] = True
+                draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
+                draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
+                if df_predicted_landmarks is not None:
+                    draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
+            else:
+                shared['show_all'] = False
+            
+        if event == "-ALL_FLOATING-":
+            if values['-ALL-FLOATING-'] == True:
+                shared['show_floating'] = True
+            else:
+                shared['show_floating'] = False
+                
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current
             # project.
@@ -378,16 +396,6 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
              pass
          
             
-        if event == "-SHOW-ALL-":
-            if shared['curr_image']:
-                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
-                
-            draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
-            draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
-            
-            if df_predicted_landmarks is not None:
-                draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
-                
         if event == "-DELETE_LDMK-":
             if shared['curr_landmark']:                
                 df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'],  shared['curr_landmark']] = np.nan

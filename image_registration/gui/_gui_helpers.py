@@ -252,8 +252,13 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
         landmarks_window = make_landmarks_window(df_model, df_landmarks, shared['curr_file'])
     
     # update the preview of the landmarks: 
-    update_landmarks_preview(shared, main_window, 300)
     
+    if shared['show_all'] == True:
+        draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
+        draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
+    else:
+        update_landmarks_preview(shared, main_window, 300)
+        
     # visualize predicted landmarks, if present:
     if df_predicted_landmarks is not None:
         draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
@@ -1435,10 +1440,10 @@ def make_main_window(size, graph_canvas_width):
     
     
     image_column = [[sg.Text("Image:", size=(10, 1)), 
-                     sg.Text("", key="-CURRENT-IMAGE-", size=(35, 1)),
+                     sg.Text("", key="-CURRENT-IMAGE-", size=(45, 1)),
                      sg.Button("Select image", key="-SELECT-IMAGE-")],
-                    [sg.Checkbox('Normalize the image preview', key="-NORMALIZATION-", default=True, enable_events=True),
-                     sg.Text("Change Brightness:", size=(20, 1)), 
+                    [sg.Checkbox('Normalize the image preview', key="-NORMALIZATION-", default=True, enable_events=True, size=(38, 1)),
+                     sg.Text("Change Brightness:", size=(15, 1)), 
                      sg.Slider(range=(1, 200), key = "-BRIGHTNESS-", orientation='h', size=(15, 20), default_value=100, enable_events=True,  disable_number_display=True)],
                     [sg.Graph(  canvas_size=(graph_canvas_width, graph_canvas_width),
                                 graph_bottom_left=(0, 0),
@@ -1466,6 +1471,8 @@ def make_main_window(size, graph_canvas_width):
                                 enable_events=False,
                                 drag_submits=False,
                                 background_color='white')],
+                         [sg.Checkbox('Visualize all landmarks', key="-ALL-LANDMARKS-", default=False, enable_events=True, size=(25, 1))],
+                         [sg.Checkbox('Visualize floating landmarks', key="-ALL-FLOATING-", default=False, enable_events=True, size=(25, 1))],
                          [sg.Button("Save changes to the project", key="-SAVE-", size=(30,3), font = 'Arial 12')]
                          ]
        
@@ -1532,7 +1539,6 @@ def make_landmarks_window(model_df, landmarks_df, current_filename, location = (
     scrollable_column = [
         [sg.Text('Select landmark: ', size=(20, 1))],
          *[[sg.Button(LM, size=(20,1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
-        [sg.Button("Show all landmarks", size = (20,1), key = "-SHOW-ALL-")],
         [sg.Button("Delete current Landmark", size = (20,1), key = "-DELETE_LDMK-", button_color = ("black", "orange"))],
         ]     
     
