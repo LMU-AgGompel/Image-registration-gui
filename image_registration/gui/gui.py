@@ -164,8 +164,10 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
         if event == "-BRIGHTNESS-":
             if shared['raw_image']:
-                scaling = 101/(1+values['-BRIGHTNESS-'])
-                shared['curr_image'] = np.uint8(np.asarray(shared['raw_image'])*scaling)
+                scaling = values['-BRIGHTNESS-']/100
+                shared['curr_image'] = np.asarray(shared['raw_image'])*scaling
+                shared['curr_image'][shared['curr_image']>255] = 255
+                shared['curr_image'] = np.uint8(shared['curr_image'])
                 shared['curr_image'] = PIL.Image.fromarray(shared['curr_image'])
                 update_image_view(shared['curr_image'], main_window, graph_canvas_width)
 

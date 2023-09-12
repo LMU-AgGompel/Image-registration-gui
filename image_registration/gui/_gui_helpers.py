@@ -1439,7 +1439,7 @@ def make_main_window(size, graph_canvas_width):
                      sg.Button("Select image", key="-SELECT-IMAGE-")],
                     [sg.Checkbox('Normalize the image preview', key="-NORMALIZATION-", default=True, enable_events=True),
                      sg.Text("Change Brightness:", size=(20, 1)), 
-                     sg.Slider(range=(1, 100), key = "-BRIGHTNESS-", orientation='h', size=(15, 20), default_value=100, enable_events=True,  disable_number_display=True)],
+                     sg.Slider(range=(1, 200), key = "-BRIGHTNESS-", orientation='h', size=(15, 20), default_value=100, enable_events=True,  disable_number_display=True)],
                     [sg.Graph(  canvas_size=(graph_canvas_width, graph_canvas_width),
                                 graph_bottom_left=(0, 0),
                                 graph_top_right=(graph_canvas_width, graph_canvas_width),
