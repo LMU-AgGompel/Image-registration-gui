@@ -101,6 +101,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                     df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
                     
                 shared['ref_image'] = open_image_PIL(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
+                shared['ref_img_pt_size'] = shared['ref_image'].width/50
                 shared['im_index'] = 0
                 
                 shared['list_landmarks'] = df_model["name"].values
