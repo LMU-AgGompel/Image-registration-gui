@@ -144,6 +144,17 @@ def draw_landmarks_preview_all(window, df_model, shared, color = "red", size = 3
             pass
     return
 
+def draw_floating_landmarks_preview_all(window, df_ref_float, shared, color = "red", size = 15):
+    floating_lmks = list(df_float_lmk.columns)
+    for landmark in floating_lmks:
+        try:
+            [x,y] = ast.literal_eval(df_ref_float[landmark].values[0])
+            [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
+            window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
+        except:
+            pass
+    return
+
 def draw_landmark(window, df_lmk, shared, color = "red", size = 30):
     [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], shared['curr_landmark']].values[0])
     [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
@@ -160,6 +171,16 @@ def draw_landmarks_all(window, df_lmk, shared, color = "red", size = 30):
             pass
     return
 
+def draw_floating_landmarks_all(window, df_float_lmk, shared, color = "red", size = 15):
+    floating_lmks = list(df_float_lmk.columns)
+    for landmark in floating_lmks:
+        try:
+            [x,y] = ast.literal_eval(df_float_lmk.loc[df_float_lmk["file name"]==shared['curr_file'], landmark].values[0])
+            [x,y] = convert_image_coordinates_to_graph(x, y,shared['curr_image'].width, shared['curr_image'].height)
+            window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+        except:
+            pass
+    return
 
 def update_landmarks_preview(shared, window, canvas_width, normalize=True):
     """
@@ -205,7 +226,7 @@ def update_landmarks_preview(shared, window, canvas_width, normalize=True):
     window['-LANDMARKS-PREVIEW-'].draw_image(data=bio.getvalue(), location=(0,height))
     return
 
-def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window):
+def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window):
     """
     Parameters
     ----------
@@ -252,12 +273,14 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
         landmarks_window = make_landmarks_window(df_model, df_landmarks, shared['curr_file'])
     
     # update the preview of the landmarks: 
-    
     if shared['show_all'] == True:
         draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
         draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
     else:
         update_landmarks_preview(shared, main_window, 300)
+    
+    if (shared['show_floating'] == True) and (df_floating_landmarks is not None):
+        draw_floating_landmarks_all(main_window, df_floating_landmarks, shared, color = "red", size = 0.5*shared['pt_size'])
         
     # visualize predicted landmarks, if present:
     if df_predicted_landmarks is not None:

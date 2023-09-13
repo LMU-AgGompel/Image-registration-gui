@@ -54,6 +54,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     df_landmarks = None
     df_model = None
     df_predicted_landmarks = None
+    df_floating_landmarks = None
+    df_ref_floating_landmarks = None
     
     # Variable used to store previous event, used to allow for keyboard inputs
     # with simultaneous keys, like Ctrl+S, etc..
@@ -89,6 +91,15 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 if os.path.exists( os.path.join(shared['proj_folder'], df_predicted_landmarks_name) ) :
                     df_predicted_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
                 
+                if os.path.exists( os.path.join(shared['proj_folder'], df_floating_landmarks_name) ) :
+                    df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+                
+                if os.path.exists( os.path.join(shared['proj_folder'], df_predicted_landmarks_name) ) :
+                    df_ref_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_ref_floating_landmarks_name))
+                
+                if os.path.exists(os.path.join(shared['proj_folder'], df_contour_model_name ) ):
+                    df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
+                    
                 shared['ref_image'] = open_image_PIL(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
                 shared['im_index'] = 0
                 
@@ -99,7 +110,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                     df_landmarks[landmark] = df_landmarks[landmark].astype(object)
                 
                 # update graph objects, landmark window, and all fields related to the image:
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)               
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window)               
 
                 
             except Exception as error_message:
@@ -114,7 +125,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-NEW-IMAGES-':
             if  (df_files is not None) and (shared['im_index']>0):
                 df_files, df_landmarks = add_new_images(shared, df_files, df_landmarks, df_model)
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window)               
 
         if event == '-MERGE-PROJECTS-':
             merge_projects()
@@ -125,19 +136,19 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == '-SELECT-IMAGE-':
             if (df_files is not None):
                 shared = select_image(shared, df_files)
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
-            
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window)               
+
         if event == "Next":
             if (df_files is not None) and (shared['im_index'] < (len(df_files.index)-1)):
                 shared['im_index'] += 1
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
-                
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window)               
+
                 
         if event == "Previous":
             if  (df_files is not None) and (shared['im_index']>0):
                 shared['im_index'] -= 1
-                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
-        
+                shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window)               
+
         if event == "Next not annotated":
             if df_files is not None:
                 
@@ -147,8 +158,8 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 
                 if len(indeces) > 0:
                     shared['im_index'] = indeces[0]
-                    shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, main_window, landmarks_window)
-        
+                    shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window)               
+
         if event == "-NORMALIZATION-":
             shared['normalize'] = values['-NORMALIZATION-']
             
@@ -183,7 +194,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             else:
                 shared['show_all'] = False
             
-        if event == "-ALL_FLOATING-":
+        if event == "-ALL-FLOATING-":
             if values['-ALL-FLOATING-'] == True:
                 shared['show_floating'] = True
             else:
@@ -258,10 +269,11 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
         if event == 'LM-FLOATING':
             main_window["-PRINT-"].update("** Predicting floating landmarks in progress **")
-            df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
             shared = floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_landmarks)
             main_window["-PRINT-"].update("** Prediction of floating landmarks completed **")
-
+            df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+            df_ref_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_ref_floating_landmarks_name))
+        
         # -------------------- keyboard shortcuts: ----------------------------
 
         if ("Control" in previous_event and "a" in event):
