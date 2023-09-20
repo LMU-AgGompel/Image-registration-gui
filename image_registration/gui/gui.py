@@ -42,7 +42,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     
     # Define variables shared between windows and their initial values:
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
-              'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
+              'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'curr_contour':None, 'prev_landmark': None, 
               'list_landmarks': None, 'pt_size': int(graph_canvas_width/15), 
               'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10, 
               'show_all': False, 'show_predicted': False, 'show_floating': False, 'contour_names':[],
@@ -358,7 +358,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             else:
                 shared['show_all'] = False
                 
-            refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+            refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
             
                 
         if event == "-ALL-PREDICTED-LANDMARKS-":
@@ -367,7 +367,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             else:
                 shared['show_predicted'] = False
                 
-            refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+            refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
             
             
         if event == "-ALL-FLOATING-":
@@ -377,7 +377,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             else:
                 shared['show_floating'] = False
                 
-            refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)   
+            refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)   
         
         
         try:   
@@ -424,6 +424,15 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == "-DELETE_LDMK-":
             if shared['curr_landmark']:                
                 df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'],  shared['curr_landmark']] = np.nan
+        
+        if event == "-TARGET_CONTOUR-":
+            shared['curr_contour'] = values["-TARGET_CONTOUR-"]
+            visualize_specific_contour(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+            
+            pass
+        
+        if event == "-EDIT_CONTOUR-":
+            pass
         
             
         if event == "-WINDOW-CLICK-":

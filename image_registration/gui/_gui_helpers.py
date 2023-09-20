@@ -15,6 +15,7 @@ import PIL
 import pandas as pd
 import numpy as np
 import ast
+import copy
 from ..registration.TPS import TPSwarping
 from ..image_processing.image_processing import *
 from skimage.filters import gaussian, threshold_otsu 
@@ -175,8 +176,12 @@ def draw_landmarks_all(window, df_lmk, shared, color = "red", size = 30):
             pass
     return
 
-def draw_floating_landmarks_all(window, df_float_lmk, shared, color = "red", size = 15):
+def draw_floating_landmarks(window, df_float_lmk, shared, color = "red", size = 15):
     floating_lmks = list(df_float_lmk.columns)
+    
+    if shared['curr_contour'] is not None:
+        floating_lmks = [fl_lmk for fl_lmk in floating_lmks if shared['curr_contour'] in fl_lmk]
+        
     for landmark in floating_lmks:
         try:
             [x,y] = ast.literal_eval(df_float_lmk.loc[df_float_lmk["file name"]==shared['curr_file'], landmark].values[0])
@@ -207,11 +212,6 @@ def update_landmarks_preview(shared, window, canvas_width, normalize=True):
     None.
 
     """
-    # image = PIL.Image.open(image_path)
-    # image = np.asarray(image)
-    # image = convert_image_to8bit(image, normalize)
-    # image = PIL.Image.fromarray(image)
-    
     image = shared['ref_image']
     
     width = image.width
@@ -275,10 +275,11 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     else:
         landmarks_window = make_landmarks_window(df_model, df_landmarks, shared, alpha = 1)
     
-    refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+    refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
     
     # remove selection of the current landmark
     shared['curr_landmark'] = None
+    shared['curr_contour'] = None
     
     # update the progress bar
     update_progress_bar(df_files, main_window)
@@ -296,7 +297,7 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     return shared, landmarks_window
 
 
-def refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
+def refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
     
     update_image_view(shared['curr_image'], main_window, shared['graph_width'])
     
@@ -308,13 +309,23 @@ def refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df
         update_landmarks_preview(shared, main_window, 300)
     
     if (shared['show_floating'] == True) and (df_floating_landmarks is not None):
-        draw_floating_landmarks_all(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
+        draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
         
     # visualize predicted landmarks, if present:
     if (shared['show_predicted'] == True) and df_predicted_landmarks is not None:
         draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
            
     return
+
+def visualize_specific_contour(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
+    
+    update_image_view(shared['curr_image'], main_window, shared['graph_width'])
+
+    if df_floating_landmarks is not None:
+        draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
+
+    return
+
 
     
 def convert_image_coordinates_to_graph(x, y, im_width, im_height):
@@ -1559,7 +1570,7 @@ def make_landmarks_window(model_df, landmarks_df, shared, location = (1200,100),
     landmarks_list = model_df["name"].values
     landmarks_buttons_colors = []
     current_filename = shared['curr_file']
-    contour_menu_options = shared['contour_names']
+    contour_menu_options = copy.deepcopy(shared['contour_names'])
     contour_menu_options.append("None")
     
     for LM in landmarks_list:
