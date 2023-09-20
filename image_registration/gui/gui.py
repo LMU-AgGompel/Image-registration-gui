@@ -45,7 +45,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'prev_landmark': None, 
               'list_landmarks': None, 'pt_size': int(graph_canvas_width/15), 
               'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10, 
-              'show_all': False, 'show_floating':False,
+              'show_all': False, 'show_predicted': False, 'show_floating': False, 'contour_names':[],
               'edge_det_sigma_l': 50, 'edge_det_min_size': 1000, 'lmk_fine_tuning_max_dist': 30,
               'graph_width': graph_canvas_width, 'CNN_binning':10,
               'CNN_augmentation': 16, 'CNN_model': None, 'ref_floating_lmks':None}
@@ -99,6 +99,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 
                 if os.path.exists(os.path.join(shared['proj_folder'], df_contour_model_name ) ):
                     df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
+                    shared['contour_names'] = df_contours_model['contour_name'].to_list()
                     
                 shared['ref_image'] = open_image_PIL(os.path.join(shared['proj_folder'], ref_image_name), normalize=False)
                 shared['ref_img_pt_size'] = shared['ref_image'].width/50
@@ -184,22 +185,6 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared['curr_image'] = np.uint8(shared['curr_image'])
                 shared['curr_image'] = PIL.Image.fromarray(shared['curr_image'])
                 update_image_view(shared['curr_image'], main_window, graph_canvas_width)
-
-        if event == "-ALL-LANDMARKS-":
-            if values['-ALL-LANDMARKS-'] == True:
-                shared['show_all'] = True
-                draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
-                draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
-                if df_predicted_landmarks is not None:
-                    draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
-            else:
-                shared['show_all'] = False
-            
-        if event == "-ALL-FLOATING-":
-            if values['-ALL-FLOATING-'] == True:
-                shared['show_floating'] = True
-            else:
-                shared['show_floating'] = False
                 
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current
@@ -364,9 +349,36 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                     main_window["-PRINT-"].update('Position of landmark '+shared['curr_landmark']+' set to: ' + str([x, y]))
                     df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], shared['curr_landmark']] = str([x,y])
                     
-
         
         # ------ events related to elements of the landmarks window -----------
+        
+        if event == "-ALL-LANDMARKS-":
+            if values['-ALL-LANDMARKS-'] == True:
+                shared['show_all'] = True
+            else:
+                shared['show_all'] = False
+                
+            refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+            
+                
+        if event == "-ALL-PREDICTED-LANDMARKS-":
+            if values['-ALL-PREDICTED-LANDMARKS-'] == True:
+                shared['show_predicted'] = True
+            else:
+                shared['show_predicted'] = False
+                
+            refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+            
+            
+        if event == "-ALL-FLOATING-":
+            
+            if values['-ALL-FLOATING-'] == True:
+                shared['show_floating'] = True
+            else:
+                shared['show_floating'] = False
+                
+            refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)   
+        
         
         try:   
             if event in shared['list_landmarks']:

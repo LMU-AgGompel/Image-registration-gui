@@ -55,8 +55,13 @@ df_ref_floating_landmarks_name = "reference_floating_landmarks_dataframe.csv"
 # ------ helper functions for the graph object and image  visualization ----- #
 #
 
+def reload_image(shared, df_files):
+    # updated current image, raw_image and current file:
+    shared['curr_image'] = open_image_PIL(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
+    shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]    
+    return shared
 
-def update_image_fields(im_index, image, df_files, window, graph_canvas_width):
+def update_image_fields(im_index, df_files, window):
     """
     Function used to update all the fields related to the current image 
     when the image is changed:
@@ -88,7 +93,6 @@ def update_image_fields(im_index, image, df_files, window, graph_canvas_width):
     window["-IMAGE-QUALITY-"].update(value=image_quality)
     window["-IMAGE-NOTES-"].update(value=image_notes)
     window["-IMAGE-ANNOTATED-"].update(value=image_annotated)
-    update_image_view(image, window, graph_canvas_width)
     
     return
 
@@ -252,40 +256,26 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
         resfreshed landmark selection window of the GUI.
     """
     
-    # updated current image, raw_image and current file:
-    shared['curr_image'] = open_image_PIL(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
-    shared['raw_image'] = shared['curr_image']
-    shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]
-    #shared['pt_size'] = shared['curr_image'].width / 80
-    
-    # update all the fields related to the image (image qualty, notes, etc..)
-    update_image_fields(shared['im_index'], shared['curr_image'], df_files, main_window, shared['graph_width'])
+    # updated current image:
+    shared = reload_image(shared, df_files)
+
+    # update all the fields related to the image (image quality, notes, etc..)
+    update_image_fields(shared['im_index'], df_files, main_window)
     
     # refresh the landmarks window, if present
     if landmarks_window:
         location = landmarks_window.CurrentLocation()
-        temp_window = make_landmarks_window(df_model, df_landmarks, shared['curr_file'], location = location)
+        temp_window = make_landmarks_window(df_model, df_landmarks, shared, location = location, alpha = 0)
         landmarks_window.Close()
         landmarks_window = temp_window
+        landmarks_window.move(x = location[0], y = location[1])
+        landmarks_window.set_alpha(1)
         
     # else, create a new one:
     else:
-        landmarks_window = make_landmarks_window(df_model, df_landmarks, shared['curr_file'])
+        landmarks_window = make_landmarks_window(df_model, df_landmarks, shared, alpha = 1)
     
-    # update the preview of the landmarks: 
-    if shared['show_all'] == True:
-        draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
-        draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
-    else:
-        update_landmarks_preview(shared, main_window, 300)
-    
-    if (shared['show_floating'] == True) and (df_floating_landmarks is not None):
-        draw_floating_landmarks_all(main_window, df_floating_landmarks, shared, color = "red", size = 0.5*shared['pt_size'])
-        
-    # visualize predicted landmarks, if present:
-    if df_predicted_landmarks is not None:
-        draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
-           
+    refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
     
     # remove selection of the current landmark
     shared['curr_landmark'] = None
@@ -306,6 +296,27 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     return shared, landmarks_window
 
 
+def refresh_landmarks_visualization(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
+    
+    update_image_view(shared['curr_image'], main_window, shared['graph_width'])
+    
+    # update the preview of the landmarks:
+    if shared['show_all'] == True:
+        draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
+        draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
+    else:
+        update_landmarks_preview(shared, main_window, 300)
+    
+    if (shared['show_floating'] == True) and (df_floating_landmarks is not None):
+        draw_floating_landmarks_all(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
+        
+    # visualize predicted landmarks, if present:
+    if (shared['show_predicted'] == True) and df_predicted_landmarks is not None:
+        draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
+           
+    return
+
+    
 def convert_image_coordinates_to_graph(x, y, im_width, im_height):
     """
     
@@ -1182,7 +1193,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
         event, values = lmk_fine_tune_window.read()
 
         if event == "-RADIUS-1-":
-            if shared['raw_image']:
+            if shared['curr_image']:
                 try:
                     sigma_l = int(values['-RADIUS-1-']/binning)
                     sigma_s = int(values['-RADIUS-2-']/binning)
@@ -1198,7 +1209,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     pass
 
         if event == "-RADIUS-2-":
-            if shared['raw_image']:
+            if shared['curr_image']:
                 try:
                     sigma_l = int(values['-RADIUS-1-']/binning)
                     sigma_s = int(values['-RADIUS-2-']/binning)
@@ -1214,7 +1225,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     pass
                 
         if event == "-MIN-SIZE-":
-            if shared['raw_image']:
+            if shared['curr_image']:
                 try:
                     sigma_l = int(values['-RADIUS-1-']/binning)
                     sigma_s = int(values['-RADIUS-2-']/binning)
@@ -1494,8 +1505,6 @@ def make_main_window(size, graph_canvas_width):
                                 enable_events=False,
                                 drag_submits=False,
                                 background_color='white')],
-                         [sg.Checkbox('Visualize all landmarks', key="-ALL-LANDMARKS-", default=False, enable_events=True, size=(25, 1))],
-                         [sg.Checkbox('Visualize floating landmarks', key="-ALL-FLOATING-", default=False, enable_events=True, size=(25, 1))],
                          [sg.Button("Save changes to the project", key="-SAVE-", size=(30,3), font = 'Arial 12')]
                          ]
        
@@ -1521,7 +1530,7 @@ def make_main_window(size, graph_canvas_width):
     return sg.Window("Image Annotation Tool", layout, size=size, finalize=True, return_keyboard_events=True)
 
 
-def make_landmarks_window(model_df, landmarks_df, current_filename, location = (1200,100), size = (300,900)):
+def make_landmarks_window(model_df, landmarks_df, shared, location = (1200,100), size = (300,900), alpha = 1):
     """
     Function used to create the extra window with buttons used to select the 
     various landmarks. The window is created only when a project is open and is 
@@ -1549,6 +1558,9 @@ def make_landmarks_window(model_df, landmarks_df, current_filename, location = (
     """
     landmarks_list = model_df["name"].values
     landmarks_buttons_colors = []
+    current_filename = shared['curr_file']
+    contour_menu_options = shared['contour_names']
+    contour_menu_options.append("None")
     
     for LM in landmarks_list:
         
@@ -1560,16 +1572,23 @@ def make_landmarks_window(model_df, landmarks_df, current_filename, location = (
             landmarks_buttons_colors.append("SteelBlue3")     
 
     scrollable_column = [
+        [sg.Checkbox('Visualize all landmarks', key="-ALL-LANDMARKS-", default=shared['show_all'], enable_events=True, size=(25, 1))],
+        [sg.Checkbox('Visualize all predicted landmarks', key="-ALL-PREDICTED-LANDMARKS-", default=shared['show_predicted'], enable_events=True, size=(25, 1))],
+        [sg.Checkbox('Visualize all floating landmarks', key="-ALL-FLOATING-", default=shared['show_floating'], enable_events=True, size=(25, 1))],
         [sg.Text('Select landmark: ', size=(20, 1))],
          *[[sg.Button(LM, size=(20,1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
         [sg.Button("Delete current Landmark", size = (20,1), key = "-DELETE_LDMK-", button_color = ("black", "orange"))],
+        [sg.Text('Edit floating landmarks: ', size=(20, 1))],
+        [sg.Combo(values=contour_menu_options , size=(20,10), enable_events=True, key='-TARGET_CONTOUR-')],
+        [sg.Button("Edit contour", size = (20,1), key = "-EDIT_CONTOUR-", button_color = ("black", "orange"))]
+        
         ]     
     
     layout = [
         [sg.Column(scrollable_column, scrollable=True,  vertical_scroll_only=True, expand_x = True, expand_y = True)],
         ]
 
-    return sg.Window("Landmark selection", layout, size=size, finalize=True, location = location)
+    return sg.Window("Landmark selection", layout, size=size, finalize=True, location = location, alpha_channel=alpha)
 
 def mouse_click_callback(event, window):
     """
