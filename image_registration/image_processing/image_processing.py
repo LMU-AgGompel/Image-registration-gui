@@ -43,6 +43,29 @@ def rebin(img, binning):
     resized = resize(img, dim, preserve_range=True, anti_aliasing=True)
     return resized
 
+def change_brightness_PIL_image(image, brightness_scaling):
+    """
+    Change the brightness of an 8 bit PIL image by rescaling the brightness up 
+    a maximum of 255.
+
+    Parameters
+    ----------
+    image : TYPE
+        DESCRIPTION.
+    brightness_scaling : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    final_image : TYPE
+        DESCRIPTION.
+
+    """
+    temp_image = np.asarray(image)*brightness_scaling
+    temp_image[temp_image > 255] = 255
+    temp_image = np.uint8(temp_image)
+    final_image = Image.fromarray(temp_image)
+    return final_image 
 
 def open_image_PIL(image_path, normalize=True):
     """

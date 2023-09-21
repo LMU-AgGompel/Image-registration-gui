@@ -43,7 +43,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
     # Define variables shared between windows and their initial values:
     shared = {'im_index':0, 'curr_file': None, 'proj_folder': "", 'ref_image': None, 
               'curr_image': None, 'raw_image': None, 'curr_landmark': None, 'curr_contour':None, 'prev_landmark': None, 
-              'list_landmarks': None, 'pt_size': int(graph_canvas_width/15), 
+              'list_landmarks': None, 'pt_size': int(graph_canvas_width/15), 'brightness':1,
               'ref_img_pt_size': 30, 'normalize': True, 'edge_det_sigma_s': 10, 
               'show_all': False, 'show_predicted': False, 'show_floating': False, 'contour_names':[],
               'edge_det_sigma_l': 50, 'edge_det_min_size': 1000, 'lmk_fine_tuning_max_dist': 30,
@@ -179,12 +179,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
         if event == "-BRIGHTNESS-":
             if shared['raw_image']:
-                scaling = values['-BRIGHTNESS-']/100
-                shared['curr_image'] = np.asarray(shared['raw_image'])*scaling
-                shared['curr_image'][shared['curr_image']>255] = 255
-                shared['curr_image'] = np.uint8(shared['curr_image'])
-                shared['curr_image'] = PIL.Image.fromarray(shared['curr_image'])
-                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
+                shared['brightness'] = values['-BRIGHTNESS-']/100
+                shared['curr_image'] = change_brightness_PIL_image(shared['raw_image'], shared['brightness'])
+                refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
                 
         if event == "-SAVE-" or ("Control" in previous_event and "s" in event):
             # Ctr-s keyboard shortcut or clicking to save button save the current
@@ -336,7 +333,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             
             # refresh the graph to remove previous points:
             if shared['curr_image']:
-                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
+                update_image_view(shared['curr_image'], main_window, '-GRAPH-', graph_canvas_width)
 
                 # draw a dot on the graph
                 main_window['-GRAPH-'].draw_point((x,y), size = shared['pt_size'], color = "red")
@@ -400,17 +397,16 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                         landmarks_window[shared['prev_landmark']].update(button_color = ("black", "SteelBlue3"))
                                                                    
                 shared['prev_landmark'] = shared['curr_landmark']
-                update_landmarks_preview(shared, main_window, 300)
-                
+                update_image_view(shared['ref_image'], main_window, "-LANDMARKS-PREVIEW-", 300)
                 draw_landmark_preview(main_window, df_model, shared, color = "red", size = shared['ref_img_pt_size'])
                 
-                update_image_view(shared['curr_image'], main_window, graph_canvas_width)
+                update_image_view(shared['curr_image'], main_window, '-GRAPH-', graph_canvas_width)
 
                 try:
-                    draw_landmark(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
+                    draw_landmarks(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
                     
                     if df_predicted_landmarks is not None:
-                        draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
+                        draw_landmarks(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
                         
                 except:
                     pass

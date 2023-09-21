@@ -58,7 +58,8 @@ df_ref_floating_landmarks_name = "reference_floating_landmarks_dataframe.csv"
 
 def reload_image(shared, df_files):
     # updated current image, raw_image and current file:
-    shared['curr_image'] = open_image_PIL(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
+    shared['raw_image'] = open_image_PIL(df_files.loc[shared['im_index'],"full path"], normalize=shared['normalize'])
+    shared['curr_image'] = change_brightness_PIL_image(shared['raw_image'], shared['brightness'])
     shared['curr_file'] = df_files.loc[shared['im_index'],"file name"]    
     return shared
 
@@ -98,7 +99,7 @@ def update_image_fields(im_index, df_files, window):
     return
 
 
-def update_image_view(image, window, canvas_width):
+def update_image_view(image, window, graph_name, graph_width):
     """
     Function used to show an image on the graph element of a window
     
@@ -108,8 +109,10 @@ def update_image_view(image, window, canvas_width):
         image to show on the window graph element.
     window : PySimplegui window
         window with a graph object.
-    canvas_width : int
-        width of the graph object
+    graph_name : TYPE
+        DESCRIPTION.
+    graph_width : TYPE
+        DESCRIPTION.
 
     Returns
     -------
@@ -119,59 +122,61 @@ def update_image_view(image, window, canvas_width):
     
     width = image.width
     height = image.height
-    scaling_factor = canvas_width/width
-    new_width = canvas_width
+    scaling_factor = graph_width/width
     new_height = int(height*scaling_factor)
     
-    image = image.resize((new_width, new_height))
-
+    image = image.resize((graph_width, new_height))
     bio = io.BytesIO()
     image.save(bio, format="PNG")
-    window['-GRAPH-'].erase()
-    window['-GRAPH-'].set_size((new_width, new_height))
-    window['-GRAPH-'].change_coordinates((0,0), (width, height), )
-    window['-GRAPH-'].draw_image(data=bio.getvalue(), location=(0,height))
+    
+    window[graph_name].erase()
+    window[graph_name].set_size((graph_width, new_height))
+    window[graph_name].change_coordinates((0,0), (width, height), )
+    window[graph_name].draw_image(data=bio.getvalue(), location=(0,height))
+    
     return
 
-def draw_landmark_preview(window, df_model, shared, color = "red", size = 30):
-    [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==shared['curr_landmark'], "target"].values[0])
-    [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
-    window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
+def draw_landmarks(window, df_lmk, shared, color = "red", size = 30):
+    if shared['curr_landmark'] is not None:
+        [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], shared['curr_landmark']].values[0])
+        [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
+        window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+    else:
+        for landmark in shared['list_landmarks']:
+            try:
+                [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], landmark].values[0])
+                [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
+                window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+            except:
+                pass
     return
 
-def draw_landmarks_preview_all(window, df_model, shared, color = "red", size = 30):
-    for landmark in shared['list_landmarks']:
-        try:
-            [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
-            [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
-            window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
-        except:
-            pass
+def draw_ref_lmks_preview(window, df_model, shared, color = "red", size = 30):
+    if shared['curr_landmark'] is not None:
+        [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==shared['curr_landmark'], "target"].values[0])
+        [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
+        window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
+    else:
+        for landmark in shared['list_landmarks']:
+            try:
+                [x,y] = ast.literal_eval(df_model.loc[df_model["name"]==landmark, "target"].values[0])
+                [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
+                window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
+            except:
+                pass
     return
 
-def draw_floating_landmarks_preview_all(window, df_ref_float, shared, color = "red", size = 15):
-    floating_lmks = list(df_float_lmk.columns)
+def draw_ref_floating_lmks_preview(window, df_ref_float, shared, color = "red", size = 15):
+    floating_lmks = list(df_ref_float.columns)
+    
+    if shared['curr_contour'] is not None:
+        floating_lmks = [fl_lmk for fl_lmk in floating_lmks if shared['curr_contour'] in fl_lmk]
+        
     for landmark in floating_lmks:
         try:
             [x,y] = ast.literal_eval(df_ref_float[landmark].values[0])
             [x,y] = convert_image_coordinates_to_graph(x, y, shared['ref_image'].width, shared['ref_image'].height)
             window['-LANDMARKS-PREVIEW-'].draw_point((x,y), size = size, color = color)
-        except:
-            pass
-    return
-
-def draw_landmark(window, df_lmk, shared, color = "red", size = 30):
-    [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], shared['curr_landmark']].values[0])
-    [x,y] = convert_image_coordinates_to_graph(x, y, shared['curr_image'].width, shared['curr_image'].height)
-    window['-GRAPH-'].draw_point((x,y), size = size, color = color)
-    return
-
-def draw_landmarks_all(window, df_lmk, shared, color = "red", size = 30):
-    for landmark in shared['list_landmarks']:
-        try:
-            [x,y] = ast.literal_eval(df_lmk.loc[df_lmk["file name"]==shared['curr_file'], landmark].values[0])
-            [x,y] = convert_image_coordinates_to_graph(x, y,shared['curr_image'].width, shared['curr_image'].height)
-            window['-GRAPH-'].draw_point((x,y), size = size, color = color)
         except:
             pass
     return
@@ -189,45 +194,6 @@ def draw_floating_landmarks(window, df_float_lmk, shared, color = "red", size = 
             window['-GRAPH-'].draw_point((x,y), size = size, color = color)
         except:
             pass
-    return
-
-def update_landmarks_preview(shared, window, canvas_width, normalize=True):
-    """
-    Function used to update the image in the landmarks preview element of the main window.
-    It opens the reference image file, converts it into 8 bit, normalizes it and resizes it.
-    
-    Parameters
-    ----------
-    image_path : str
-        path to the image.
-    window : PySimplegui window
-        main window with the -LANDMARK-PREVIEW- element.
-    canvas_width : int
-        width of the -LANDMARK-PREVIEW- graph element.
-    normalize : bool, optional
-        wether the image should be normalized before visualization. The default is True.
-
-    Returns
-    -------
-    None.
-
-    """
-    image = shared['ref_image']
-    
-    width = image.width
-    height = image.height
-    scaling_factor = canvas_width/width
-    new_width = canvas_width
-    new_height = int(height*scaling_factor)
-    
-    image = image.resize((new_width, new_height))
-
-    bio = io.BytesIO()
-    image.save(bio, format="PNG")
-    window['-LANDMARKS-PREVIEW-'].erase()
-    window['-LANDMARKS-PREVIEW-'].set_size((new_width, new_height))
-    window['-LANDMARKS-PREVIEW-'].change_coordinates((0,0), (width, height), )
-    window['-LANDMARKS-PREVIEW-'].draw_image(data=bio.getvalue(), location=(0,height))
     return
 
 def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window):
@@ -299,31 +265,33 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
 
 def refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
     
-    update_image_view(shared['curr_image'], main_window, shared['graph_width'])
+    update_image_view(shared['curr_image'], main_window, "-GRAPH-", shared['graph_width'])
+    update_image_view(shared['ref_image'], main_window, "-LANDMARKS-PREVIEW-", 300)
     
     # update the preview of the landmarks:
     if shared['show_all'] == True:
-        draw_landmarks_preview_all(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
-        draw_landmarks_all(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
-    else:
-        update_landmarks_preview(shared, main_window, 300)
-    
+        draw_ref_lmks_preview(main_window, df_model, shared, color = "red", size =  shared['ref_img_pt_size'])
+        draw_landmarks(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
+
     if (shared['show_floating'] == True) and (df_floating_landmarks is not None):
         draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
+        draw_ref_floating_lmks_preview(main_window, df_ref_floating_landmarks, shared, color = "red",  size = 0.75*shared['ref_img_pt_size'])
         
     # visualize predicted landmarks, if present:
     if (shared['show_predicted'] == True) and df_predicted_landmarks is not None:
-        draw_landmarks_all(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
+        draw_landmarks(main_window, df_predicted_landmarks, shared, color = "green", size = shared['pt_size'])
            
     return
 
 def visualize_specific_contour(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
     
-    update_image_view(shared['curr_image'], main_window, shared['graph_width'])
+    update_image_view(shared['curr_image'], main_window, '-GRAPH-', shared['graph_width'])
+    update_image_view(shared['ref_image'], main_window, "-LANDMARKS-PREVIEW-", 300)
 
     if df_floating_landmarks is not None:
         draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
-
+        draw_ref_floating_lmks_preview(main_window, df_ref_floating_landmarks, shared, color = "red",  size = 0.75*shared['ref_img_pt_size'])
+        
     return
 
 
@@ -1214,7 +1182,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     
                     edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
+                    update_image_view(edges_img_PIL, lmk_fine_tune_window, '-GRAPH-', canvas_width)   
                 except Exception as e:
                     print(str(e))
                     pass
@@ -1230,7 +1198,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     
                     edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
+                    update_image_view(edges_img_PIL, lmk_fine_tune_window, '-GRAPH-', canvas_width)   
                 except Exception as e:
                     print(str(e))
                     pass
@@ -1246,7 +1214,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     
                     edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, lmk_fine_tune_window, canvas_width)   
+                    update_image_view(edges_img_PIL, lmk_fine_tune_window, '-GRAPH-', canvas_width)   
                 except Exception as e:
                     print(str(e))
                     pass
