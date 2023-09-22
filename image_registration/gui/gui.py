@@ -397,8 +397,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                         landmarks_window[shared['prev_landmark']].update(button_color = ("black", "SteelBlue3"))
                                                                    
                 shared['prev_landmark'] = shared['curr_landmark']
+                
                 update_image_view(shared['ref_image'], main_window, "-LANDMARKS-PREVIEW-", 300)
-                draw_landmark_preview(main_window, df_model, shared, color = "red", size = shared['ref_img_pt_size'])
+                draw_ref_lmks_preview(main_window, df_model, shared, color = "red", size = shared['ref_img_pt_size'])
                 
                 update_image_view(shared['curr_image'], main_window, '-GRAPH-', graph_canvas_width)
 
@@ -421,6 +422,20 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             if shared['curr_landmark']:                
                 df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'],  shared['curr_landmark']] = np.nan
         
+        if event == "-SELECT_NO_LMK-":
+            if shared['curr_landmark'] is not None:
+                
+                    LM_position = df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'],  shared['curr_landmark']].values[0]
+                    
+                    if LM_position != LM_position: # check if LM_position is np.nan
+                        landmarks_window[shared['curr_landmark']].update(button_color = ("black", "FloralWhite"))    
+                    else:
+                        landmarks_window[shared['curr_landmark']].update(button_color = ("black", "SteelBlue3"))
+                         
+            shared['curr_landmark'] = None
+            shared['prev_landmark'] = None
+            refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)   
+        
         if event == "-TARGET_CONTOUR-":
             shared['curr_contour'] = values["-TARGET_CONTOUR-"]
             visualize_specific_contour(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
@@ -428,6 +443,17 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             pass
         
         if event == "-EDIT_CONTOUR-":
+            if shared['curr_landmark'] is not None:
+                
+                    LM_position = df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'],  shared['curr_landmark']].values[0]
+                    
+                    if LM_position != LM_position: # check if LM_position is np.nan
+                        landmarks_window[shared['curr_landmark']].update(button_color = ("black", "FloralWhite"))    
+                    else:
+                        landmarks_window[shared['curr_landmark']].update(button_color = ("black", "SteelBlue3"))
+                         
+            shared['curr_landmark'] = None
+            shared['prev_landmark'] = None
             pass
         
             

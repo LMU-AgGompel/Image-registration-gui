@@ -228,6 +228,11 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     # update all the fields related to the image (image quality, notes, etc..)
     update_image_fields(shared['im_index'], df_files, main_window)
     
+    # remove selection of the current landmark
+    shared['curr_landmark'] = None
+    shared['prev_landmark'] = None
+    shared['curr_contour'] = None
+    
     # refresh the landmarks window, if present
     if landmarks_window:
         location = landmarks_window.CurrentLocation()
@@ -242,10 +247,6 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
         landmarks_window = make_landmarks_window(df_model, df_landmarks, shared, alpha = 1)
     
     refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
-    
-    # remove selection of the current landmark
-    shared['curr_landmark'] = None
-    shared['curr_contour'] = None
     
     # update the progress bar
     update_progress_bar(df_files, main_window)
@@ -1557,6 +1558,7 @@ def make_landmarks_window(model_df, landmarks_df, shared, location = (1200,100),
         [sg.Text('Select landmark: ', size=(20, 1))],
          *[[sg.Button(LM, size=(20,1), key = LM, button_color = ("black", landmarks_buttons_colors[i])),] for i, LM in enumerate(landmarks_list)],
         [sg.Button("Delete current Landmark", size = (20,1), key = "-DELETE_LDMK-", button_color = ("black", "orange"))],
+        [sg.Button("Select None", size = (20,1), key = "-SELECT_NO_LMK-", button_color = ("black", "white"))],
         [sg.Text('Edit floating landmarks: ', size=(20, 1))],
         [sg.Combo(values=contour_menu_options , size=(20,10), enable_events=True, key='-TARGET_CONTOUR-')],
         [sg.Button("Edit contour", size = (20,1), key = "-EDIT_CONTOUR-", button_color = ("black", "orange"))]
