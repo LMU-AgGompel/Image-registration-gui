@@ -489,6 +489,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             if shared['curr_contour'] is not None:
                 
                 df_floating_landmarks_manual = remove_contour_from_dataframe(shared['curr_file'], shared['curr_contour'], df_floating_landmarks_manual)
+                df_floating_landmarks_manual.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_manual_name), index = False)
                 
                 landmarks_window['-TARGET_CONTOUR-'].update(value = 'None')
                 shared['curr_contour'] = None
@@ -502,6 +503,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         
         if event == "-EDIT_CONTOUR_START-":
 
+            shared["contour_manual_pts"] = []
             if shared['curr_landmark'] is not None:
                 
                     LM_position = df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'],  shared['curr_landmark']].values[0]
@@ -519,9 +521,10 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == "-EDIT_CONTOUR_END-":
             if shared['curr_contour'] is not None:
                 df_floating_landmarks_manual = fit_contour_through_points(shared, df_contours_model, df_landmarks, df_floating_landmarks_manual)
-                df_floating_landmarks_manual.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_manual_name))
+                df_floating_landmarks_manual.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_manual_name), index = False)
                 landmarks_window['-TARGET_CONTOUR-'].update(value = 'None')
                 shared['curr_contour'] = None
+                shared["contour_manual_pts"] = []
                 refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window)   
                 main_window["-PRINT-"].update('')
                 
@@ -533,6 +536,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
             if shared['curr_contour'] is not None:
                 landmarks_window['-TARGET_CONTOUR-'].update(value = 'None')
                 shared['curr_contour'] = None
+                shared["contour_manual_pts"] = []
                 refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window)   
                 main_window["-PRINT-"].update('')
                 

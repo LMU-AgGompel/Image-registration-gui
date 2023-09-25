@@ -472,7 +472,6 @@ def create_new_project():
             
             df_files = df_files.drop_duplicates(subset='file name', keep="first")
             
-            #df_files.to_csv(os.path.join(project_folder, df_files_name))
             df_files.to_csv(os.path.join(project_folder, df_files_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names created.')
             
@@ -487,7 +486,6 @@ def create_new_project():
             
             new_model_path = values['-NEW-MODEL-FILE-']
             df_model = pd.read_csv(new_model_path)
-            #df_model.to_csv(os.path.join(project_folder, df_model_name))
             df_model.to_csv(os.path.join(project_folder, df_model_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe with model information copied in the project folder.')
             
@@ -497,7 +495,6 @@ def create_new_project():
                 for landmark in landmark_names:
                     df_landmarks[landmark] = np.nan
                 
-                #df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
                 df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index=False)
                 dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates created.')
             except:
@@ -596,9 +593,9 @@ def merge_projects():
                 try:
                     new_ref_image_path = os.path.join(project_folder, ref_image_name)
                     shutil.copy(reference_image_path, new_ref_image_path)
-                    df_files.to_csv(os.path.join(project_folder, df_files_name))
-                    df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
-                    df_model_1.to_csv(os.path.join(project_folder, df_model_name))
+                    df_files.to_csv(os.path.join(project_folder, df_files_name), index=False)
+                    df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index = False)
+                    df_model_1.to_csv(os.path.join(project_folder, df_model_name), index = False)
                     dialog_box.update(value=dialog_box.get()+'\n - Merged files saved in the destination folder.')
                     
                 except:
@@ -664,7 +661,7 @@ def add_new_images(shared, df_files, df_landmarks, df_model):
             df_files = pd.concat([df_files, temp_df_files])
             df_files = df_files.drop_duplicates(subset='file name', keep="first")
             df_files = df_files.reset_index(drop=True)
-            df_files.to_csv(os.path.join(project_folder, df_files_name))
+            df_files.to_csv(os.path.join(project_folder, df_files_name), index = False)
             dialog_box.update(value=dialog_box.get()+'\n - Dataframe with file names updated.')
 
             landmark_names = df_model['name'].values
@@ -674,7 +671,7 @@ def add_new_images(shared, df_files, df_landmarks, df_model):
                 
             df_landmarks = pd.concat([df_landmarks, temp_df_files])
             df_landmarks = df_landmarks.reset_index(drop=True)
-            df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name))
+            df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates updated.')
 
         if event == "Exit" or event == sg.WIN_CLOSED:
@@ -786,6 +783,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
     dialog_box = registration_window["-DIALOG-"]
     df_registration_landmarks = df_landmarks.copy()
     df_floating_landmarks = None
+    df_floating_landmarks_manual = None
     df_ref_floating_landmarks = None
     floating_landmarks_names = None
     
@@ -808,7 +806,20 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
 
         if event == '-USE-FLOATING-LMKS-':
             if values["-USE-FLOATING-LMKS-"] == True:
+                
                 df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+                
+                try:
+                    df_floating_landmarks_manual = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_manual_name))
+                    df_floating_landmarks = df_floating_landmarks.set_index(['file name'])
+                    df_floating_landmarks_manual = df_floating_landmarks_manual.set_index(['file name'])
+                    df_floating_landmarks.update(df_floating_landmarks_manual)
+                    df_floating_landmarks = df_floating_landmarks.reset_index()
+
+                except:
+                    df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+
+                    
                 df_ref_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_ref_floating_landmarks_name))
                 floating_landmarks_names = list(df_ref_floating_landmarks.columns)
                 
@@ -949,7 +960,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
 
                 # save the info file:
                 df_info = df_info.reset_index(drop=True)
-                df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'))
+                df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'), index = False)
                     
 
                 # update the loading bar
@@ -958,7 +969,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
 
             dialog_box.update(value='\n - All of the images have been registered')
             df_info = df_info.reset_index(drop=True)
-            df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'))
+            df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'), index=False)
             
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
@@ -1304,7 +1315,7 @@ def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, d
             
         dialog_box.update(value=dialog_box.get()+'\n - ' + file_name + ' has been processed')
         
-    df_predicted_landmarks.to_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name))
+    df_predicted_landmarks.to_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name), index = False)
 
     return
 
