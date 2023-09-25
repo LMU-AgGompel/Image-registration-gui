@@ -10,7 +10,7 @@ The GUI also provides an interface to train and use a convolutional neural netwo
 
 This project is still a work-in-progress and some features are not fully developed yet.
 
-<img src="doc/figures/screenshot.png" width="600" align="center"/> 
+<img src="doc/figures/screenshot.png" width="800" align="center"/> 
 
 <!-- ROADMAP -->
 ## Current Roadmap
@@ -36,14 +36,3 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-Image Registration GUI
-==============================
-
-<!-- ABOUT THE PROJECT -->
-## About The Project
-
-Welcome to the Image Registration GUI project! This open-source project provides a user-friendly graphical interface for image annotation, landmark placement, and image registration. Whether you're a researcher, developer, or enthusiast, our GUI simplifies complex image processing tasks and supports neural network training.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
