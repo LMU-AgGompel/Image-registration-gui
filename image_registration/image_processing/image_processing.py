@@ -704,3 +704,33 @@ def find_equispaced_points_along_curve_with_spline(curve_points, n_equispaced_po
     equispaced_points = spline(np.linspace(0, 1, n_equispaced_points+2, endpoint = True))
 
     return equispaced_points[1:-1]
+
+
+
+def reorder_points_from_start_to_end(points, start_point, end_point):
+    # Convert points to a NumPy array for efficient calculations
+    points = np.array(points)
+    start_point = np.array(start_point)
+    end_point = np.array(end_point)
+
+    # Add start and end points to the list
+    points = np.vstack((start_point, points, end_point))
+
+    # Calculate pairwise distances using vectorized NumPy operations
+    pairwise_distances = np.linalg.norm(points[:, np.newaxis] - points, axis=2)
+
+    # Initialize a list to store the reordered points
+    reordered_points = [0]
+    remaining_points = set(range(1, len(points)))
+
+    # Reorder the points to minimize distances
+    while remaining_points:
+        current_point = reordered_points[-1]
+        nearest_point = min(remaining_points, key=lambda p: pairwise_distances[current_point, p])
+        reordered_points.append(nearest_point)
+        remaining_points.remove(nearest_point)
+
+    # Convert reordered points back to the original format
+    reordered_points = np.array([list(points[i]) for i in reordered_points])
+
+    return reordered_points

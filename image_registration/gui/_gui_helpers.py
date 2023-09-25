@@ -50,6 +50,8 @@ df_predicted_landmarks_name = "predicted_landmarks_dataframe.csv"
 
 df_floating_landmarks_name = "floating_landmarks_dataframe.csv"
 
+df_floating_landmarks_manual_name = "manual_floating_landmarks_dataframe.csv"
+
 df_ref_floating_landmarks_name = "reference_floating_landmarks_dataframe.csv"
 
 #
@@ -194,9 +196,10 @@ def draw_floating_landmarks(window, df_float_lmk, shared, color = "red", size = 
             window['-GRAPH-'].draw_point((x,y), size = size, color = color)
         except:
             pass
+        
     return
 
-def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window, landmarks_window):
+def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window, landmarks_window):
     """
     Parameters
     ----------
@@ -246,7 +249,7 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     else:
         landmarks_window = make_landmarks_window(df_model, df_landmarks, shared, alpha = 1)
     
-    refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window)
+    refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window)
     
     # update the progress bar
     update_progress_bar(df_files, main_window)
@@ -264,7 +267,7 @@ def refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_pred
     return shared, landmarks_window
 
 
-def refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
+def refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window):
     
     update_image_view(shared['curr_image'], main_window, "-GRAPH-", shared['graph_width'])
     update_image_view(shared['ref_image'], main_window, "-LANDMARKS-PREVIEW-", 300)
@@ -275,8 +278,11 @@ def refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted
         draw_landmarks(main_window, df_landmarks, shared, color = "blue", size = shared['pt_size'])
 
     if (shared['show_floating'] == True) and (df_floating_landmarks is not None):
-        draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
+        draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = 0.75*shared['pt_size'])
         draw_ref_floating_lmks_preview(main_window, df_ref_floating_landmarks, shared, color = "red",  size = 0.75*shared['ref_img_pt_size'])
+        
+        if df_floating_landmarks_manual is not None:
+            draw_floating_landmarks(main_window, df_floating_landmarks_manual, shared, color = "blue", size = 0.75*shared['pt_size'])
         
     # visualize predicted landmarks, if present:
     if (shared['show_predicted'] == True) and df_predicted_landmarks is not None:
@@ -284,17 +290,20 @@ def refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted
            
     return
 
-def visualize_specific_contour(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, main_window):
+def visualize_specific_contour(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window):
     
     update_image_view(shared['curr_image'], main_window, '-GRAPH-', shared['graph_width'])
     update_image_view(shared['ref_image'], main_window, "-LANDMARKS-PREVIEW-", 300)
 
     if df_floating_landmarks is not None:
-        draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = shared['pt_size'])
+        draw_floating_landmarks(main_window, df_floating_landmarks, shared, color = "black", size = 0.75*shared['pt_size'])
         draw_ref_floating_lmks_preview(main_window, df_ref_floating_landmarks, shared, color = "red",  size = 0.75*shared['ref_img_pt_size'])
+    
+    if df_floating_landmarks_manual is not None:
+        draw_floating_landmarks(main_window, df_floating_landmarks_manual, shared, color = "blue", size = 0.75*shared['pt_size'])
         
+    
     return
-
 
     
 def convert_image_coordinates_to_graph(x, y, im_width, im_height):
@@ -1344,7 +1353,7 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
     
     # Merge manual landmarks and predicted landmarks:
     df_all_landmarks = df_landmarks.copy()
-    if df_predicted_landmarks:
+    if df_predicted_landmarks is not None:
         df_all_landmarks.update(df_predicted_landmarks, overwrite=False)
 
     # Start looping through the images to register:
@@ -1377,6 +1386,50 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
         
     return shared
 
+def fit_contour_through_points(shared, df_contours_model, df_landmarks, df_floating_landmarks_manual):
+
+    contour  = shared['curr_contour']
+    filename = shared['curr_file']
+    
+    if filename not in df_floating_landmarks_manual['file name'].values:
+        df_floating_landmarks_manual = pd.concat([df_floating_landmarks_manual, pd.DataFrame.from_records([{'file name':shared['curr_file']}])], ignore_index = True)
+    
+    n_points  = df_contours_model.query("`contour_name` == @contour")['n_points'].values[0]
+
+    start_lmk = df_contours_model.query("`contour_name` == @contour")['contour_start'].values[0]
+    end_lmk   = df_contours_model.query("`contour_name` == @contour")['contour_end'].values[0]
+    
+    start_lmk_pos = ast.literal_eval( df_landmarks.query("`file name` == @filename")[start_lmk].values[0] )
+    end_lmk_pos   = ast.literal_eval( df_landmarks.query("`file name` == @filename")[end_lmk].values[0] )
+    
+    # Order the points according to distance:
+    curve_points = reorder_points_from_start_to_end(shared["contour_manual_pts"], start_lmk_pos, end_lmk_pos)
+    
+    # Fit a spline and get uniformly spaced points:
+    new_floating_lmks = find_equispaced_points_along_curve_with_spline(curve_points, n_points)
+    
+    for i in range(n_points):
+        float_lmk_name = contour+"_"+str(i)
+        lmk_x = new_floating_lmks[i,0]
+        lmk_y = new_floating_lmks[i,1]
+        df_floating_landmarks_manual.loc[df_floating_landmarks_manual['file name'] == filename, float_lmk_name] = str([lmk_x, lmk_y])
+        
+    return df_floating_landmarks_manual
+    
+
+def remove_contour_from_dataframe(filename, contour_name, df_contours):
+    floating_lmks = list(df_contours.columns)
+    
+    if contour_name is not None:
+        floating_lmks = [fl_lmk for fl_lmk in floating_lmks if contour_name in fl_lmk]
+        
+        for landmark in floating_lmks:
+            try:
+                df_contours.loc[df_contours["file name"]==filename, landmark] = None
+            except:
+                pass
+            
+    return df_contours
 
 #
 #  ------------------  Definition of Main GUI windows ----------------------- #
@@ -1561,7 +1614,10 @@ def make_landmarks_window(model_df, landmarks_df, shared, location = (1200,100),
         [sg.Button("Select None", size = (20,1), key = "-SELECT_NO_LMK-", button_color = ("black", "white"))],
         [sg.Text('Edit floating landmarks: ', size=(20, 1))],
         [sg.Combo(values=contour_menu_options , size=(20,10), enable_events=True, key='-TARGET_CONTOUR-')],
-        [sg.Button("Edit contour", size = (20,1), key = "-EDIT_CONTOUR-", button_color = ("black", "orange"))]
+        [sg.Button("Remove manual contour", size = (20,1), key = "-REMOVE_CONTOUR-", button_color = ("black", "orange"))],
+        [sg.Button("Start editing contour", size = (20,1), key = "-EDIT_CONTOUR_START-", button_color = ("black", "orange"))],
+        [sg.Button("Finish editing contour", size = (20,1), key = "-EDIT_CONTOUR_END-", button_color = ("black", "orange"))],
+        [sg.Button("Cancel editing contour", size = (20,1), key = "-EDIT_CONTOUR_CANCEL-", button_color = ("black", "orange"))]
         
         ]     
     
@@ -1597,10 +1653,12 @@ def mouse_click_callback(event, window):
         widget = None
     for element in window.element_list():
         element_widget = element.Widget
+        
         # if the mouse click happened inside any element of the window, simply 
         # return nothing:
         if widget  == element_widget:
             return
+        
     # otherwise, rise a "-WINDOW-CLICK-" event
     window.write_event_value('-WINDOW-CLICK-', (x, y))
     return
