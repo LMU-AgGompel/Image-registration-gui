@@ -255,6 +255,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 
         if event == 'LM-FINETUNE':
             lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files)
+
+        if event == 'CONTOUR-MODEL':
+            define_contours_model_window(shared, df_landmarks, df_model, df_files, df_contours_model)
             
         if event == 'LM-FLOATING':
             main_window["-PRINT-"].update("** Predicting floating landmarks in progress **")
