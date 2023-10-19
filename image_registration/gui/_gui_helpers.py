@@ -126,16 +126,16 @@ def update_image_view(image, window, graph_name, graph_width):
     height = image.height
     scaling_factor = graph_width/width
     new_height = int(height*scaling_factor)
-    
+
     image = image.resize((graph_width, new_height))
     bio = io.BytesIO()
     image.save(bio, format="PNG")
-    
+
     window[graph_name].erase()
     window[graph_name].set_size((graph_width, new_height))
     window[graph_name].change_coordinates((0,0), (width, height), )
     window[graph_name].draw_image(data=bio.getvalue(), location=(0,height))
-    
+
     return
 
 def draw_landmarks(window, df_lmk, shared, color = "red", size = 30):
@@ -1345,14 +1345,16 @@ def realign_coordinates(p_x, p_y, max_dist, img):
 
 def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_contours_model):
     
-    image = shared['ref_image']
+    image = np.array(shared['ref_image'])
+    width = image.shape[1]
     canvas_size = 800
+    canvas_width = 800
     
     contours_names = shared['contour_names']
     principal_landmarks = df_model['name'].to_list()
     
     layout_graph = sg.Graph(canvas_size=(canvas_size , canvas_size), graph_bottom_left=(0, 0),
-                        graph_top_right=(canvas_size , canvas_size ), key="-GRAPH-",
+                        graph_top_right=(canvas_size , canvas_size), key="-GRAPH-",
                         enable_events=True, background_color='white',
                         drag_submits=False)
     layout_commands = [
@@ -1366,19 +1368,19 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                        [sg.Combo(values=contours_names , size=(20,10), enable_events=True, key='-CONTOUR-')],
                        [sg.Text('Contour Properties:', size=(30, 1))],
                        [sg.Text('Edge detection - large radius: ', size=(30, 1))], 
-                       [sg.Slider(range=(1, image.width/30), key = "-RADIUS-1-", orientation='h', size=(25, 20), default_value=shared['edge_det_sigma_l'] , enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(1, width/30), key = "-RADIUS-1-", orientation='h', size=(25, 20), default_value=10, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Edge detection - small radius: ', size=(30, 1))],
-                       [sg.Slider(range=(1, image.width/30), key = "-RADIUS-2-", orientation='h', size=(25, 20), default_value=shared['edge_det_sigma_s'] , enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(1, width/30), key = "-RADIUS-2-", orientation='h', size=(25, 20), default_value=1 , enable_events=True,  disable_number_display=False)],
                        [sg.Text('Edge detection - size threshold: ', size=(30, 1))],
-                       [sg.Slider(range=(1, image.width), key = "-MIN-SIZE-", orientation='h', size=(25, 20), default_value=shared['edge_det_min_size'], enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(1, width), key = "-MIN-SIZE-", orientation='h', size=(25, 20), default_value=1, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Active contour - alpha: ', size=(40, 1))],
-                       [sg.Slider(range=(1, image.width/30), key = "-ALPHA-", orientation='h', size=(25, 20), default_value=shared['lmk_fine_tuning_max_dist'], enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(0, 100), key = "-ALPHA-", orientation='h', size=(25, 20), default_value=0.1, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Active contour - spacing: ', size=(40, 1))],
-                       [sg.Slider(range=(0, 100), key = "-REL-SPACING-", orientation='h', size=(25, 20), default_value=shared['lmk_fine_tuning_max_dist'], enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(0, 100), key = "-REL-SPACING-", orientation='h', size=(25, 20), default_value=0.1, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Active contour - binning: ', size=(40, 1))],
-                       [sg.Slider(range=(1, 100), key = "-BINNING-", orientation='h', size=(25, 20), default_value=shared['lmk_fine_tuning_max_dist'], enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(1, 100), key = "-BINNING-", orientation='h', size=(25, 20), default_value=10, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Active contour - N points: ', size=(40, 1))],
-                       [sg.Slider(range=(1, 30), key = "-N-POINTS-", orientation='h', size=(25, 20), default_value=shared['lmk_fine_tuning_max_dist'], enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(1, 30), key = "-N-POINTS-", orientation='h', size=(25, 20), default_value=2, enable_events=True,  disable_number_display=False)],
                        
                        
                        [sg.Text('', size = (40,1))],
@@ -1406,8 +1408,8 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                     
                     edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)   
-                except Exception as e:
+                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width) 
+                except Exception as e:                    
                     print(str(e))
                     pass
 
@@ -1419,7 +1421,7 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                     sigma_s = min(sigma_l, sigma_s)
                     min_size = int(values['-MIN-SIZE-'])
                     
-                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
                     update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)   
                 except Exception as e:
@@ -1429,19 +1431,35 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
         if event == "-MIN-SIZE-":
             if shared['curr_image']:
                 try:
-                    sigma_l = int(values['-RADIUS-1-']/binning)
-                    sigma_s = int(values['-RADIUS-2-']/binning)
+                    sigma_l = int(values['-RADIUS-1-'])
+                    sigma_s = int(values['-RADIUS-2-'])
                     sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-']/binning)
-                    shared['edge_det_min_size'] = values['-MIN-SIZE-']
+                    min_size = int(values['-MIN-SIZE-'])
                     
-                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
+                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
+                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
+                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)    
+                except Exception as e:
+                    print( str(e) )
+                    pass
+                
+        if event == "-CONTOUR-":
+            curr_contour = values["-CONTOUR-"]
+            update_sliders_contours_model_window(contour_model_window, df_contours_model, curr_contour)
+            if shared['curr_image']:
+                try:
+                    sigma_l = int(values['-RADIUS-1-'])
+                    sigma_s = int(values['-RADIUS-2-'])
+                    sigma_s = min(sigma_l, sigma_s)
+                    min_size = int(values['-MIN-SIZE-'])
+                    
+                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
                     edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
                     update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)   
                 except Exception as e:
                     print( str(e) )
                     pass
-
+                
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
     try:
@@ -1449,6 +1467,17 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
     except:
         pass
     
+    return
+
+def update_sliders_contours_model_window(window, df_contours_model, contour):
+    row = df_contours_model[df_contours_model['contour_name'] == contour]
+    window['-RADIUS-1-'].update(row['edge_large_lengthscale'].values[0])
+    window['-RADIUS-2-'].update(row['edge_small_lengthscale'].values[0])
+    window['-MIN-SIZE-'].update(row['edge_size_threshold'].values[0])
+    window['-ALPHA-'].update(row['energy_alpha'].values[0])
+    window['-REL-SPACING-'].update(row['contour_rel_spacing'].values[0])
+    window['-BINNING-'].update(row['binning'].values[0])
+    window['-N-POINTS-'].update(row['n_points'].values[0])
     return
 
 #
