@@ -187,6 +187,8 @@ def enhance_and_extract_edges(image, large_scale_smoothing, small_scale_smoothin
         raise ValueError("The 'large_scale_smoothing' parameter must be greater than 'small_scale_smoothing'.")
     if min_object_size <= 0:
         raise ValueError("The 'min_object_size' parameter must be a positive integer.")
+    if not isinstance(image, np.ndarray):
+        raise ValueError("image is not a NumPy array")
 
     # Compute the edges using Gaussian filtering
     edges = gaussian(image, large_scale_smoothing, preserve_range=True) - gaussian(image, small_scale_smoothing, preserve_range=True)
