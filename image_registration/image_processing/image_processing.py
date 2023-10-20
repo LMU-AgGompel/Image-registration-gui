@@ -16,6 +16,8 @@ from skimage.filters import gaussian
 from skimage.morphology import remove_small_objects
 from scipy.ndimage import distance_transform_edt
 from scipy.interpolate import make_interp_spline
+from scipy.signal import fftconvolve
+from scipy import signal
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import ast
@@ -162,6 +164,16 @@ def convert_image_to8bit(image, normalize=False):
     image = np.uint8(image)
     return image
 
+def gaussian_kernel(n, std, normalised=True):
+    '''
+    Generates a n x n matrix with a centered gaussian 
+    of standard deviation std centered on it. If normalised,
+    its volume equals 1.'''
+    gaussian1D = signal.gaussian(n, std)
+    gaussian2D = np.outer(gaussian1D, gaussian1D)
+    if normalised:
+        gaussian2D = gaussian2D/np.sum(gaussian2D)
+    return gaussian2D
 
 def enhance_and_extract_edges(image, large_scale_smoothing, small_scale_smoothing, min_object_size, invert=True):
     """
@@ -191,18 +203,24 @@ def enhance_and_extract_edges(image, large_scale_smoothing, small_scale_smoothin
         raise ValueError("image is not a NumPy array")
 
     # Compute the edges using Gaussian filtering
-    edges = gaussian(image, large_scale_smoothing, preserve_range=True) - gaussian(image, small_scale_smoothing, preserve_range=True)
+    # edges = gaussian(image, large_scale_smoothing, preserve_range=True) - gaussian(image, small_scale_smoothing, preserve_range=True)
+    kernel_size = large_scale_smoothing*3+1
+    kernel_L = gaussian_kernel(kernel_size, large_scale_smoothing)
+    kernel_S = gaussian_kernel(kernel_size, small_scale_smoothing)
 
+    edges = fftconvolve(image, kernel_L-kernel_S, mode='same')
+    
     # Threshold the edges
-    threshold_value = 0.5 * threshold_otsu(edges)
+    threshold_value = 0.5 * threshold_otsu(np.abs(edges))
     edges = edges > threshold_value
 
     # Remove small objects
     edges = remove_small_objects(edges, min_size=min_object_size)
 
     # Apply Gaussian filtering again
-    edges = gaussian(edges, (large_scale_smoothing + small_scale_smoothing) / 2, preserve_range=False)
-
+    kernel_M = gaussian_kernel(large_scale_smoothing*2+1, (large_scale_smoothing + small_scale_smoothing) / 2)
+    edges = fftconvolve(edges, kernel_M, mode='same')
+    
     # Threshold the edges again
     edges = edges > threshold_otsu(edges)
 
@@ -706,7 +724,6 @@ def find_equispaced_points_along_curve_with_spline(curve_points, n_equispaced_po
     equispaced_points = spline(np.linspace(0, 1, n_equispaced_points+2, endpoint = True))
 
     return equispaced_points[1:-1]
-
 
 
 def reorder_points_from_start_to_end(points, start_point, end_point):
