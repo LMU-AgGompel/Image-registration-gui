@@ -1564,7 +1564,7 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                 pass
         
         if event == "-SAVE-MODEL-":
-            df_contours_model.to_csv(os.path.join(shared['proj_folder'], df_contour_model_name))
+            df_contours_model.to_csv(os.path.join(shared['proj_folder'], df_contour_model_name), index = False)
             temp_values_dict['contour_seeds']=[]
             
         if event == "Exit" or event == sg.WIN_CLOSED:
