@@ -1329,7 +1329,7 @@ def realign_coordinates(p_x, p_y, max_dist, img):
 
    "find value of all pixels around rescaled coordinates in reference image"
    roi = img[p_y_n-max_dist:p_y_n+max_dist+1, p_x_n-max_dist:p_x_n+max_dist+1]
-   delta_y, delta_x = np.unravel_index(np.argmax(roi, axis=None), roi.shape)
+   delta_y, delta_x = np.unravel_index(np.argmin(roi, axis=None), roi.shape)
 
    "change coordinate to that with the highest value in reference image"
    p_x_c = p_x_n-max_dist+delta_x
