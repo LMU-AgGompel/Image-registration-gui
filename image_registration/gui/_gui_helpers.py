@@ -1340,23 +1340,35 @@ def realign_coordinates(p_x, p_y, max_dist, img):
 
 
 #
-# --------------- Functions implementing a GUI window to create an active contour model: ---------  #
+# --------------- Functions implementing a GUI window to create or edit the active contour model: ---------  #
 #
 
 def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_contours_model):
     
     image = np.array(shared['ref_image'])
+    height = image.shape[0]
     width = image.shape[1]
-    canvas_size = 800
     canvas_width = 800
+    canvas_height = int(height*canvas_width/width)
     
-    contours_names = shared['contour_names']
+    contours_names = df_contours_model['contour_name'].to_list()
     principal_landmarks = df_model['name'].to_list()
     
-    layout_graph = sg.Graph(canvas_size=(canvas_size , canvas_size), graph_bottom_left=(0, 0),
-                        graph_top_right=(canvas_size , canvas_size), key="-GRAPH-",
+    temp_values_dict = {'contour_seeds':[]}
+    
+    # Get the positions of principal landmarks in a dictionary:
+    landmarks_dict = dict(zip(df_model["name"], df_model["target"]))
+    for lm_key in landmarks_dict.keys():
+        landmarks_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_dict[lm_key])))
+
+    layout_graph = [
+                    [sg.Graph(canvas_size=(canvas_width, canvas_height), graph_bottom_left=(0, 0),
+                        graph_top_right = (canvas_width, canvas_height), key="-GRAPH-",
                         enable_events=True, background_color='white',
-                        drag_submits=False)
+                        drag_submits=False)],
+                    [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(60, 5))]])]
+                    ]
+    
     layout_commands = [
                        [sg.Text('Add new contour to the model:', size=(30, 1))],
                        [sg.Text('Select start point:', size=(30, 1))],
@@ -1366,102 +1378,206 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                        [sg.Button("Add contour", size=(30,2), key='-ADD-CONTOUR-')],
                        [sg.Text('Select contour to edit:', size=(30, 1))],
                        [sg.Combo(values=contours_names , size=(20,10), enable_events=True, key='-CONTOUR-')],
+                       [sg.Button("Remove contour", size=(30,2), key='-REMOVE-CONTOUR-')],
                        [sg.Text('Contour Properties:', size=(30, 1))],
-                       [sg.Text('Edge detection - large radius: ', size=(30, 1))], 
-                       [sg.Slider(range=(1, width/30), key = "-RADIUS-1-", orientation='h', size=(25, 20), default_value=10, enable_events=True,  disable_number_display=False)],
-                       [sg.Text('Edge detection - small radius: ', size=(30, 1))],
-                       [sg.Slider(range=(1, width/30), key = "-RADIUS-2-", orientation='h', size=(25, 20), default_value=1 , enable_events=True,  disable_number_display=False)],
-                       [sg.Text('Edge detection - size threshold: ', size=(30, 1))],
-                       [sg.Slider(range=(1, width), key = "-MIN-SIZE-", orientation='h', size=(25, 20), default_value=1, enable_events=True,  disable_number_display=False)],
-                       [sg.Text('Active contour - alpha: ', size=(40, 1))],
-                       [sg.Slider(range=(0, 100), key = "-ALPHA-", orientation='h', size=(25, 20), default_value=0.1, enable_events=True,  disable_number_display=False)],
-                       [sg.Text('Active contour - spacing: ', size=(40, 1))],
-                       [sg.Slider(range=(0, 100), key = "-REL-SPACING-", orientation='h', size=(25, 20), default_value=0.1, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Active contour - binning: ', size=(40, 1))],
-                       [sg.Slider(range=(1, 100), key = "-BINNING-", orientation='h', size=(25, 20), default_value=10, enable_events=True,  disable_number_display=False)],
+                       [sg.Slider(range=(1, 50), key = "-BINNING-", orientation='h', size=(25, 20), default_value=10, enable_events=True,  disable_number_display=False)],
+                       [sg.Text('Edge detection - large radius: ', size=(30, 1))],
+                       [sg.Slider(range=(1, width/30), key = "-RADIUS-L-", orientation='h', size=(25, 20), default_value=10, enable_events=True,  disable_number_display=False)],
+                       [sg.Text('Edge detection - small radius: ', size=(30, 1))],
+                       [sg.Slider(range=(1, width/30), key = "-RADIUS-S-", orientation='h', size=(25, 20), default_value=1 , enable_events=True,  disable_number_display=False)],
+                       [sg.Text('Edge detection - size threshold: ', size=(20, 1)), sg.Text('', size=(10,1), key='-MIN-SIZE-TXT-')],
+                       [sg.Slider(range=(1, 60), key = "-MIN-SIZE-", orientation='h', size=(25, 20), default_value=30, enable_events=True,  disable_number_display=True)],
+                       [sg.Text('Active contour - alpha: ', size=(20, 1)), sg.Text('', size=(10,1), key='-ALPHA-TXT-')],
+                       [sg.Slider(range=(-100, 100), key = "-ALPHA-SLIDER-", orientation='h', size=(25, 20), default_value=0, enable_events=True,  disable_number_display=True)],
+                       [sg.Text('Active contour - rel spacing [%]: ', size=(40, 1))],
+                       [sg.Slider(range=(1, 100), key = "-REL-SPACING-", orientation='h', size=(25, 20), default_value=5, enable_events=True,  disable_number_display=False)],
                        [sg.Text('Active contour - N points: ', size=(40, 1))],
                        [sg.Slider(range=(1, 30), key = "-N-POINTS-", orientation='h', size=(25, 20), default_value=2, enable_events=True,  disable_number_display=False)],
-                       
-                       
                        [sg.Text('', size = (40,1))],
-                       [sg.Button("Test active contour model", size=(30,2), key='-TEST-CONTOURS-')],
-                       [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(60, 5))]])]
+                       [sg.Text('Contour starting points: ', size=(40, 1))],
+                       [sg.Button("Store starting points", size=(30,2), key='-SAVE-CONTOUR-SEEDS-')],
+                       [sg.Button("Clear starting points", size=(30,2), key='-CLEAR-CONTOUR-SEEDS-')],
+                       [sg.Button("Save contour model", size=(30,2), key='-SAVE-MODEL-')]
                       ]
     layout = [
-              [layout_graph, sg.Column(layout_commands,  vertical_alignment = 'top')]
+              [sg.Column(layout_graph, vertical_alignment = "top"), 
+               sg.Column(layout_commands,  vertical_alignment = 'top')]
              ]
     
-    contour_model_window = sg.Window("Edit contour model", layout, modal=True)
+    contour_model_window = sg.Window("Edit contour model", layout, modal=True, finalize=True)
     dialog_box = contour_model_window["-DIALOG-"] 
     
+    # Create events that are triggered only when a slider cursor is released:
+    contour_model_window['-BINNING-'].bind('<ButtonRelease-1>', ' Release')
+    contour_model_window['-RADIUS-L-'].bind('<ButtonRelease-1>', ' Release')
+    contour_model_window['-RADIUS-S-'].bind('<ButtonRelease-1>', ' Release')
+    contour_model_window['-MIN-SIZE-'].bind('<ButtonRelease-1>', ' Release')
+    contour_model_window['-ALPHA-SLIDER-'].bind('<ButtonRelease-1>', ' Release')
+    contour_model_window['-REL-SPACING-'].bind('<ButtonRelease-1>', ' Release')
+    contour_model_window['-N-POINTS-'].bind('<ButtonRelease-1>', ' Release')
 
     while True:
         event, values = contour_model_window.read()
+        
+        if event == "-GRAPH-":  
+        # A graph event corresponds to a mouse click in the graph area
+            x, y = values["-GRAPH-"]
 
-        if event == "-RADIUS-1-":
-            if shared['curr_image']:
-                try:
-                    sigma_l = int(values['-RADIUS-1-'])
-                    sigma_s = int(values['-RADIUS-2-'])
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-'])
-                    
-                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width) 
-                except Exception as e:                    
-                    print(str(e))
-                    pass
+            try:
+                contour_model_window['-GRAPH-'].draw_point((x,y), size = 30/int(values['-BINNING-']), color = "blue")
+                binning = int(values['-BINNING-'])
+                x = x*binning
+                y = y*binning
+                [x,y] = convert_graph_coordinates_to_image(x, y, width, height)
+                # Y,X definition: 
+                temp_values_dict['contour_seeds'].append([y,x]) 
+            except  Exception as e:
+                print(str(e))
+                pass
+            
+        if event == "-ADD-CONTOUR-":
+            start_lmk = values['-START-LMK-']
+            stop_lmk = values['-STOP-LMK-']
+            if start_lmk and stop_lmk:
+                name = start_lmk+"--"+stop_lmk
+                contours_names.append(name)
+                contour_seed_x = str([landmarks_dict[start_lmk][0], landmarks_dict[stop_lmk][0]])
+                contour_seed_y = str([landmarks_dict[start_lmk][1], landmarks_dict[stop_lmk][1]])
+                new_row = {'contour_name': name, 'contour_start': start_lmk, 'contour_end': stop_lmk,
+                        'seed_pts_x': contour_seed_x, 'seed_pts_y':	contour_seed_y,
+                        'edge_large_lengthscale':	20,'edge_small_lengthscale':10,	
+                        'edge_size_threshold': 100, 'energy_alpha': 1, 
+                        'contour_rel_spacing':  0.1,'binning': 10, 'n_points': 4}
+                df_contours_model.loc[len(df_contours_model)] = new_row
+                contour_model_window['-CONTOUR-'].update(value=contours_names[0], values=contours_names)
+                temp_values_dict['contour_seeds']=[]
 
-        if event == "-RADIUS-2-":
-            if shared['curr_image']:
-                try:
-                    sigma_l = int(values['-RADIUS-1-'])
-                    sigma_s = int(values['-RADIUS-2-'])
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-'])
-                    
-                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)   
-                except Exception as e:
-                    print(str(e))
-                    pass
+        if event == "-REMOVE-CONTOUR-":
+            curr_contour = values["-CONTOUR-"]
+            contours_names.remove(curr_contour)
+            df_contours_model =  df_contours_model.drop(df_contours_model[df_contours_model['contour_name'] == curr_contour].index)
+            contour_model_window['-CONTOUR-'].update(value=contours_names[0], values=contours_names)
+            _, values = contour_model_window.read(timeout = 10) # need to read the window again to update values
+            temp_values_dict['contour_seeds']=[]
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+               
+            except Exception as e:
+                print( str(e) )
+                pass
                 
-        if event == "-MIN-SIZE-":
-            if shared['curr_image']:
-                try:
-                    sigma_l = int(values['-RADIUS-1-'])
-                    sigma_s = int(values['-RADIUS-2-'])
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-'])
-                    
-                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)    
-                except Exception as e:
-                    print( str(e) )
-                    pass
                 
         if event == "-CONTOUR-":
             curr_contour = values["-CONTOUR-"]
             update_sliders_contours_model_window(contour_model_window, df_contours_model, curr_contour)
-            if shared['curr_image']:
-                try:
-                    sigma_l = int(values['-RADIUS-1-'])
-                    sigma_s = int(values['-RADIUS-2-'])
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-'])
-                    
-                    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, contour_model_window, '-GRAPH-', canvas_width)   
-                except Exception as e:
-                    print( str(e) )
-                    pass
+            _, values = contour_model_window.read(timeout = 10) # need to read the window again to update values
+            temp_values_dict['contour_seeds']=[]
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+               
+            except Exception as e:
+                print( str(e) )
+                pass
                 
+                
+        if event == "-BINNING- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:                    
+                print(str(e))
+                pass        
+
+        if event == "-RADIUS-L- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:                    
+                print(str(e))
+                pass
+
+        if event == "-RADIUS-S- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:
+                print(str(e))
+                pass
+                
+        if event == "-MIN-SIZE- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:
+                print( str(e) )
+                pass
+            
+        if event == "-ALPHA-SLIDER- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:
+                print( str(e) )
+                pass
+
+        if event == "-REL-SPACING- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:
+                print( str(e) )
+                pass
+
+        if event == "-N-POINTS- Release":
+            try:
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:
+                print( str(e) )
+                pass
+            
+        if event == "-SAVE-CONTOUR-SEEDS-":
+            try:
+                save_contour_seeds(values, landmarks_dict, df_contours_model, temp_values_dict['contour_seeds'])
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+                temp_values_dict['contour_seeds']=[]
+                
+            except Exception as e:
+                print( str(e) )
+                pass
+            
+        if event == "-CLEAR-CONTOUR-SEEDS-":
+            try:
+                temp_values_dict['contour_seeds']=[]
+                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
+               
+            except Exception as e:
+                print( str(e) )
+                pass
+        
+        if event == "-SAVE-MODEL-":
+            df_contours_model.to_csv(os.path.join(shared['proj_folder'], df_contour_model_name))
+            temp_values_dict['contour_seeds']=[]
+            
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
+        
+        try:
+            contour_model_window.Element('-ALPHA-TXT-').Update('{:.2e}'.format(
+                calculate_alpha_from_slider(values['-ALPHA-SLIDER-'])))
+            contour_model_window.Element('-MIN-SIZE-TXT-').Update('{:.2e}'.format(
+                calculate_threshold_value_from_slider(values['-MIN-SIZE-'])))
+        except:
+            pass
+        
     try:
         contour_model_window.close()  
     except:
@@ -1469,16 +1585,150 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
     
     return
 
+def save_contour_seeds(values, lmk_pos_dict, df_contours_model, points):
+    curr_contour = values["-CONTOUR-"]
+    row = df_contours_model[df_contours_model['contour_name'] == curr_contour]
+    p_start = lmk_pos_dict[row['contour_start'].values[0]]
+    p_end   = lmk_pos_dict[row['contour_end'].values[0]]
+    pts = reorder_points_from_start_to_end(points, p_start, p_end)
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, "seed_pts_x"] = str(list(pts[:,1]))
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, "seed_pts_y"] = str(list(pts[:,0]))
+    return
+
+def calculate_alpha_from_slider(slider_value):
+    alpha = 10**((slider_value)/25)
+    alpha = np.round(alpha*10000)/10000.0
+    return alpha
+
+def calculate_slider_value_from_alpha(alpha):
+    slider_value = np.log10(alpha)*25
+    return slider_value
+
+def calculate_threshold_value_from_slider(slider_value):
+    min_size_threshold = np.round(10**((slider_value)/10))
+    return min_size_threshold
+
+def calculate_slider_value_from_threshold(threshold):
+    slider_value = np.log10(threshold)*10
+    return slider_value
+
+def compute_edges(image, contour_params):
+    binning = contour_params['binning']
+    sigma_l = contour_params['edge_large_lengthscale']/binning
+    sigma_s = contour_params['edge_small_lengthscale']/binning
+    min_size = int(contour_params['edge_size_threshold']/binning)+1
+    image_binned = bin_normalize_smooth(image, binning)    
+    edges_img = enhance_and_extract_edges(image_binned, sigma_l, sigma_s, min_size)
+    edges_img = edges_img+gaussian(edges_img, sigma_l,
+                   mode='constant', cval=0.0, truncate=10)
+    edges_img = edges_img/np.max(edges_img)
+    image_binned = image_binned/np.max(image_binned)
+    return image_binned, edges_img
+
+def fit_contour_for_preview(image, contour_params, lmk_pos_dict):
+    energy = image**2
+    binning = contour_params['binning']
+    
+    pts_relative_seeds_x = np.array(ast.literal_eval(contour_params["seed_pts_x"]))
+    pts_relative_seeds_y = np.array(ast.literal_eval(contour_params["seed_pts_y"]))
+    pts_relative_seeds = np.array([pts_relative_seeds_y, pts_relative_seeds_x]).T
+    
+    p_start = lmk_pos_dict[contour_params['contour_start']]/binning
+    p_end   = lmk_pos_dict[contour_params['contour_end']]/binning
+    
+    alpha   = contour_params['energy_alpha']
+    rel_spacing = contour_params['contour_rel_spacing']
+    n_points = contour_params['n_points']
+    flip_pts = False
+    
+    points = fit_active_contour(energy, p_start, p_end, pts_relative_seeds, flip_pts, alpha, rel_spacing)
+    equispaced_points = find_equispaced_points_along_curve_with_spline(points, n_points)
+    # swapping the x,y because the contour fitting returns y,x:
+    points[:,[0, 1]] = points[:,[1, 0]]
+    equispaced_points[:,[0, 1]] = equispaced_points[:,[1, 0]]
+    return points, equispaced_points
+
+def draw_contour(window, points, width, height, color = "red", size = 15):
+    for point in points:
+        x, y = point
+        [x,y] = convert_image_coordinates_to_graph(x, y, width, height)
+        window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+    return
+
+def view_contour_seeds_points(window, contour_params, lmk_pos_dict, width, height, size = 20, color = "blue"):
+
+    binning = contour_params['binning']
+    
+    pts_relative_seeds_x = np.array(ast.literal_eval(contour_params["seed_pts_x"]))
+    pts_relative_seeds_y = np.array(ast.literal_eval(contour_params["seed_pts_y"]))
+    pts_relative_seeds   = np.array([pts_relative_seeds_y, pts_relative_seeds_x]).T
+    
+    p_start = lmk_pos_dict[contour_params['contour_start']]/binning
+    p_end   = lmk_pos_dict[contour_params['contour_end']]/binning
+    
+    # Move the relative seeds points:
+    points_seeds = position_starting_points_active_contour(pts_relative_seeds, p_start, p_end, flip_pts = False)
+    
+    # swapping the x,y because the previous function returns y,x:
+    points_seeds[:,[0, 1]] = points_seeds[:,[1, 0]]
+    
+    for point in points_seeds:
+        x, y = point
+        [x,y] = convert_image_coordinates_to_graph(x, y, width, height)
+        window['-GRAPH-'].draw_point((x,y), size = size, color = color)
+        
+    return
+
+from matplotlib import cm
+
+def update_view_contour_model(image, values, window, df_contours_model, landmarks_dict, canvas_width):
+    curr_contour = values["-CONTOUR-"]
+    
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'edge_large_lengthscale'] = values['-RADIUS-L-']
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'edge_small_lengthscale'] = values['-RADIUS-S-']
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'edge_size_threshold'] = calculate_threshold_value_from_slider(values['-MIN-SIZE-'])
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'energy_alpha'] = calculate_alpha_from_slider(values['-ALPHA-SLIDER-'])
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'contour_rel_spacing'] =  values['-REL-SPACING-']/100.0
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'binning'] = int(values['-BINNING-'])
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, 'n_points'] = int(values['-N-POINTS-'])
+    
+    contour_params = df_contours_model[df_contours_model['contour_name'] == curr_contour].to_dict(orient='records')[0]
+    
+    binned_img, edges_img = compute_edges(image, contour_params) 
+    points, equispaced_points = fit_contour_for_preview(edges_img, contour_params , landmarks_dict)
+    
+    raw_image_PIL = PIL.Image.fromarray(np.uint8(255*cm.gray(binned_img)))
+    edges_img_PIL = PIL.Image.fromarray(np.uint8(255*cm.gist_heat(edges_img)))
+    blended_image = PIL.Image.blend(raw_image_PIL,edges_img_PIL, alpha = 0.5)
+    update_image_view(blended_image, window, '-GRAPH-', canvas_width)
+    
+    width = edges_img_PIL.width
+    height = edges_img_PIL.height
+    binning = int(values['-BINNING-'])
+    draw_contour(window, points, width, height, size = 20/binning)
+    draw_contour(window, equispaced_points, width, height, size = 40/binning)
+    
+    view_contour_seeds_points(window, contour_params, landmarks_dict, width, height, size = 30/binning)
+    return
+        
+
 def update_sliders_contours_model_window(window, df_contours_model, contour):
     row = df_contours_model[df_contours_model['contour_name'] == contour]
-    window['-RADIUS-1-'].update(row['edge_large_lengthscale'].values[0])
-    window['-RADIUS-2-'].update(row['edge_small_lengthscale'].values[0])
-    window['-MIN-SIZE-'].update(row['edge_size_threshold'].values[0])
-    window['-ALPHA-'].update(row['energy_alpha'].values[0])
-    window['-REL-SPACING-'].update(row['contour_rel_spacing'].values[0])
+    window['-RADIUS-L-'].update(row['edge_large_lengthscale'].values[0])
+    window['-RADIUS-S-'].update(row['edge_small_lengthscale'].values[0])
+    window['-MIN-SIZE-'].update(calculate_slider_value_from_threshold(row['edge_size_threshold'].values[0]))
+    window['-ALPHA-SLIDER-'].update(calculate_slider_value_from_alpha(row['energy_alpha'].values[0]))
+    window['-REL-SPACING-'].update(row['contour_rel_spacing'].values[0]*100)
     window['-BINNING-'].update(row['binning'].values[0])
     window['-N-POINTS-'].update(row['n_points'].values[0])
     return
+
+
+
+
+
+
+
 
 #
 #  ----------  Helper functions for detection of floating landmarks ---------- #
@@ -1744,6 +1994,8 @@ def make_landmarks_window(model_df, landmarks_df, shared, location = (1200,100),
     None.
 
     """
+
+    
     landmarks_list = model_df["name"].values
     landmarks_buttons_colors = []
     current_filename = shared['curr_file']

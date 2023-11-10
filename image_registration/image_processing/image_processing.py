@@ -204,7 +204,7 @@ def enhance_and_extract_edges(image, large_scale_smoothing, small_scale_smoothin
 
     # Compute the edges using Gaussian filtering
     # edges = gaussian(image, large_scale_smoothing, preserve_range=True) - gaussian(image, small_scale_smoothing, preserve_range=True)
-    kernel_size = large_scale_smoothing*3+1
+    kernel_size = int(large_scale_smoothing)*3+1
     kernel_L = gaussian_kernel(kernel_size, large_scale_smoothing)
     kernel_S = gaussian_kernel(kernel_size, small_scale_smoothing)
 
@@ -218,11 +218,12 @@ def enhance_and_extract_edges(image, large_scale_smoothing, small_scale_smoothin
     edges = remove_small_objects(edges, min_size=min_object_size)
 
     # Apply Gaussian filtering again
-    kernel_M = gaussian_kernel(large_scale_smoothing*2+1, (large_scale_smoothing + small_scale_smoothing) / 2)
+    kernel_M = gaussian_kernel(kernel_size, (large_scale_smoothing + small_scale_smoothing) / 2)
     edges = fftconvolve(edges, kernel_M, mode='same')
     
     # Threshold the edges again
-    edges = edges > threshold_otsu(edges)
+    threshold_value = 0.5 * threshold_otsu(np.abs(edges))
+    edges = edges > threshold_value
 
     # Compute the distance transform of the edges
     edges = distance_transform_edt(edges)
@@ -483,6 +484,7 @@ def position_starting_points_active_contour(pts_ref, p_start, p_end, flip_pts = 
 
     # Compute the scaling factor (uniform scaling on both axes)
     scaling_factor = np.hypot(p_end[0] - p_start[0], p_end[1] - p_start[1]) / np.hypot(y_ref[-1] - y_ref[0], x_ref[-1] - x_ref[0])
+    scaling_factor = np.abs(scaling_factor)
     pts_ref = scaling_factor * pts_ref
 
     # Compute the rotation angle
@@ -499,9 +501,9 @@ def position_starting_points_active_contour(pts_ref, p_start, p_end, flip_pts = 
 
     return transformed_pts_ref
 
-def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts, 
+def fit_active_contour(energy, p_start, p_end, pts_relative_seed, flip_pts, 
                        alpha, rel_spacing, 
-                       options={'maxiter': 200, 'gtol':0.01, 'eps':0.01},
+                       options={'maxiter': 1000, 'gtol':0.01, 'eps':0.1},
                        method='CG'):
     """
     Fit an active contour to an energy image using optimization.
@@ -510,8 +512,8 @@ def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts,
         energy (numpy.ndarray): The energy image as a 2D numpy array.
         p_start (tuple): Starting point coordinates (p_start_y, p_start_x).
         p_end (tuple): Ending point coordinates (p_end_y, p_end_x).
-        pts_relative_prior (numpy.ndarray): Relative positions of prior points as a 2D numpy array.
-        flip_pts (bool): Whether to flip the prior points horizontally.
+        pts_relative_seed (numpy.ndarray): Relative positions of seed points as a 2D numpy array.
+        flip_pts (bool): Whether to flip the seed points horizontally.
         alpha (float): Weight parameter for the energy term in the optimization.
         rel_spacing (float): Desired spacing between points along the contour.
         options (dict): Optimization options (default values provided).
@@ -521,13 +523,13 @@ def fit_active_contour(energy, p_start, p_end, pts_relative_prior, flip_pts,
         numpy.ndarray: Optimized points representing the fitted active contour.
 
     The function performs the following steps:
-    1. Define the initial positions for the active contour using relative prior points and spacing.
+    1. Define the initial positions for the active contour using relative seed points and spacing.
     2. Crop the energy image around the contour and normalize it.
     3. Find the contour with minimal energy using optimization.
     """
 
     # 1. Define the active contour initial positions:
-    pts = position_starting_points_active_contour(pts_relative_prior, p_start, p_end, flip_pts=flip_pts)
+    pts = position_starting_points_active_contour(pts_relative_seed, p_start, p_end, flip_pts=flip_pts)
     displacements = pts[1:] - pts[0:-1]
     point_distances = np.sqrt(displacements[:, 0]**2 + displacements[:, 1]**2)
     cumul_dist = np.cumsum(point_distances)
@@ -643,8 +645,8 @@ def fit_multiple_contours_model(image, landmarks_dict, landmarks_ref_dict, multi
             image_binned = bin_normalize_smooth(image, binning)
             prev_binning = binning
             
-        large_scale_smoothing = int(model["edge_large_lengthscale"] / binning)
-        small_scale_smoothing = int(model["edge_small_lengthscale"] / binning)
+        large_scale_smoothing = model["edge_large_lengthscale"] / binning
+        small_scale_smoothing = model["edge_small_lengthscale"] / binning
         min_object_size = int(model["edge_size_threshold"] / (binning**2))   
         
         if ((prev_l_smoothing != large_scale_smoothing)
@@ -653,8 +655,9 @@ def fit_multiple_contours_model(image, landmarks_dict, landmarks_ref_dict, multi
 
             image_edges = enhance_and_extract_edges(image_binned,
                           large_scale_smoothing, small_scale_smoothing, min_object_size)
-            image_edges = gaussian(image_edges, large_scale_smoothing,
+            image_edges = image_edges+gaussian(image_edges, large_scale_smoothing,
                            mode='constant', cval=0.0, truncate=10)
+            image_edges = image_edges/np.max(image_edges)
             
             energy = image_edges**2
             
@@ -665,14 +668,14 @@ def fit_multiple_contours_model(image, landmarks_dict, landmarks_ref_dict, multi
         p_start = landmarks_dict[model["contour_start"]]/ binning
         p_end = landmarks_dict[model["contour_end"]]/ binning
         
-        pts_relative_prior_x = np.array(ast.literal_eval(model["pts_prior_x"]))
-        pts_relative_prior_y = np.array(ast.literal_eval(model["pts_prior_y"]))
-        pts_relative_prior = np.array([pts_relative_prior_y, pts_relative_prior_x]).T
+        pts_relative_seed_x = np.array(ast.literal_eval(model["seed_pts_x"]))
+        pts_relative_seed_y = np.array(ast.literal_eval(model["seed_pts_y"]))
+        pts_relative_seed = np.array([pts_relative_seed_y, pts_relative_seed_x]).T
         
         energy_alpha = model["energy_alpha"]
         rel_spacing = model["contour_rel_spacing"]
         
-        contour_pts = binning * fit_active_contour(energy, p_start, p_end, pts_relative_prior,
+        contour_pts = binning * fit_active_contour(energy, p_start, p_end, pts_relative_seed,
                                          flipping, energy_alpha, rel_spacing)
         
         n_equispaced_points = model["n_points"]

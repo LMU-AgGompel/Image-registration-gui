@@ -31,6 +31,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
 
     """
 
+    sg.theme("DarkBlue3")
+    sg.set_options(font=("Arial", 10))
+
     # initialize the main window:
     main_window = make_main_window(main_window_size, graph_canvas_width)
     landmarks_window = None
@@ -258,6 +261,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
 
         if event == 'CONTOUR-MODEL':
             define_contours_model_window(shared, df_landmarks, df_model, df_files, df_contours_model)
+            if os.path.exists(os.path.join(shared['proj_folder'], df_contour_model_name ) ):
+                df_contours_model = pd.read_csv( os.path.join(shared['proj_folder'], df_contour_model_name ) )
+                shared['contour_names'] = df_contours_model['contour_name'].to_list()
             
         if event == 'LM-FLOATING':
             main_window["-PRINT-"].update("** Predicting floating landmarks in progress **")
