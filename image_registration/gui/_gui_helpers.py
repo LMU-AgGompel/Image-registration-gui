@@ -1345,6 +1345,10 @@ def realign_coordinates(p_x, p_y, max_dist, img):
 
 def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_contours_model):
     
+    if df_contours_model is None:
+        df_contours_model = pd.DataFrame(columns = 
+        ['contour_name','contour_start','contour_end','seed_pts_x','seed_pts_y','edge_large_lengthscale','edge_small_lengthscale','edge_size_threshold','energy_alpha','contour_rel_spacing','binning','n_points']
+        )
     image = np.array(shared['ref_image'])
     height = image.shape[0]
     width = image.shape[1]
@@ -1457,16 +1461,10 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
             curr_contour = values["-CONTOUR-"]
             contours_names.remove(curr_contour)
             df_contours_model =  df_contours_model.drop(df_contours_model[df_contours_model['contour_name'] == curr_contour].index)
-            contour_model_window['-CONTOUR-'].update(value=contours_names[0], values=contours_names)
+            contour_model_window['-CONTOUR-'].update(value=None, values=contours_names)
             _, values = contour_model_window.read(timeout = 10) # need to read the window again to update values
             temp_values_dict['contour_seeds']=[]
-            try:
-                update_view_contour_model(image, values, contour_model_window, df_contours_model, landmarks_dict, canvas_width)
-               
-            except Exception as e:
-                print( str(e) )
-                pass
-                
+            contour_model_window['-GRAPH-'].erase()
                 
         if event == "-CONTOUR-":
             curr_contour = values["-CONTOUR-"]
@@ -1564,7 +1562,8 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                 pass
         
         if event == "-SAVE-MODEL-":
-            df_contours_model.to_csv(os.path.join(shared['proj_folder'], df_contour_model_name), index = False)
+            if len(df_contours_model) > 0:
+                df_contours_model.to_csv(os.path.join(shared['proj_folder'], df_contour_model_name), index = False)
             temp_values_dict['contour_seeds']=[]
             
         if event == "Exit" or event == sg.WIN_CLOSED:
