@@ -1154,14 +1154,12 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
     
     image = shared['curr_image']
     canvas_size = 800
-    binning = min(image.width/canvas_size , image.height/canvas_size )
+    binning = image.width/canvas_size
     dim = (int(image.height/binning), int(image.width/binning))
     image_preview = resize(np.asarray(image), dim, preserve_range=True, anti_aliasing=True).astype('uint16')
     canvas_width =  int(shared['curr_image'].width/binning)
     canvas_height = int(shared['curr_image'].height/binning)
     df_registration_landmarks = df_landmarks.copy()
-
-    
     
     layout_graph = sg.Graph(canvas_size=(canvas_size , canvas_size), graph_bottom_left=(0, 0),
                         graph_top_right=(canvas_size , canvas_size ), key="-GRAPH-",
@@ -1186,8 +1184,11 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
               [layout_graph, sg.Column(layout_commands,  vertical_alignment = 'top')]
              ]
     lmk_fine_tune_window = sg.Window("Fine tuning the position of predicted landmarks", layout, modal=True)
-    dialog_box = lmk_fine_tune_window["-DIALOG-"] 
+    dialog_box = lmk_fine_tune_window["-DIALOG-"]
     
+    # Initialize window view:
+    _, values = lmk_fine_tune_window.read(timeout = 10) 
+    edges_img, shared = update_floating_lmks_fine_tuning_preview(lmk_fine_tune_window, values, binning, shared, image_preview) 
     
     while True:
         event, values = lmk_fine_tune_window.read()
@@ -1195,15 +1196,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
         if event == "-RADIUS-1-":
             if shared['curr_image']:
                 try:
-                    sigma_l = int(values['-RADIUS-1-']/binning)
-                    sigma_s = int(values['-RADIUS-2-']/binning)
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-']/binning)
-                    shared['edge_det_sigma_l'] = values['-RADIUS-1-']
-                    
-                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, lmk_fine_tune_window, '-GRAPH-', canvas_width)   
+                    edges_img, shared = update_floating_lmks_fine_tuning_preview(lmk_fine_tune_window, values, binning, shared, image_preview) 
                 except Exception as e:
                     print(str(e))
                     pass
@@ -1211,15 +1204,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
         if event == "-RADIUS-2-":
             if shared['curr_image']:
                 try:
-                    sigma_l = int(values['-RADIUS-1-']/binning)
-                    sigma_s = int(values['-RADIUS-2-']/binning)
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-']/binning)
-                    shared['edge_det_sigma_s'] = values['-RADIUS-2-']
-                    
-                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, lmk_fine_tune_window, '-GRAPH-', canvas_width)   
+                    edges_img, shared = update_floating_lmks_fine_tuning_preview(lmk_fine_tune_window, values, binning, shared, image_preview) 
                 except Exception as e:
                     print(str(e))
                     pass
@@ -1227,15 +1212,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
         if event == "-MIN-SIZE-":
             if shared['curr_image']:
                 try:
-                    sigma_l = int(values['-RADIUS-1-']/binning)
-                    sigma_s = int(values['-RADIUS-2-']/binning)
-                    sigma_s = min(sigma_l, sigma_s)
-                    min_size = int(values['-MIN-SIZE-']/binning)
-                    shared['edge_det_min_size'] = values['-MIN-SIZE-']
-                    
-                    edges_img = enhance_and_extract_edges(image_preview, sigma_l, sigma_s, min_size)
-                    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
-                    update_image_view(edges_img_PIL, lmk_fine_tune_window, '-GRAPH-', canvas_width)   
+                    edges_img, shared = update_floating_lmks_fine_tuning_preview(lmk_fine_tune_window, values, binning, shared, image_preview) 
                 except Exception as e:
                     print(str(e))
                     pass
@@ -1258,7 +1235,7 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     [x_c,y_c] = convert_image_coordinates_to_graph(x_c, y_c, canvas_width, canvas_height)
                     lmk_fine_tune_window['-GRAPH-'].draw_point((x,y), size = 10, color = 'green')
                     lmk_fine_tune_window['-GRAPH-'].draw_point((x_c,y_c), size = 10, color = 'red')
-                 
+                    dialog_box.update("Fine tuned landmarks: green: original position, red: corrected position")
                 except Exception as e:
                     print(str(e))
                     pass
@@ -1274,6 +1251,19 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
         pass
     
     return
+
+def update_floating_lmks_fine_tuning_preview(window, values, binning, shared, image):
+    sigma_l = int(values['-RADIUS-1-']/binning)
+    sigma_s = int(values['-RADIUS-2-']/binning)
+    min_size = int(values['-MIN-SIZE-']/binning)
+    shared['edge_det_min_size'] = values['-MIN-SIZE-']
+    shared['edge_det_sigma_s'] = values['-RADIUS-2-']
+    shared['edge_det_sigma_l'] = values['-RADIUS-1-']
+    
+    edges_img = enhance_and_extract_edges(image, sigma_l, sigma_s, min_size)
+    edges_img_PIL = PIL.Image.fromarray(np.uint8(edges_img*255))
+    update_image_view(edges_img_PIL, window, '-GRAPH-', edges_img_PIL.width)
+    return edges_img, shared
 
 def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, df_files, dialog_box):
     # Get the images and their landmarks
