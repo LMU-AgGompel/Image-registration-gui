@@ -1380,7 +1380,7 @@ def fit_multiple_contours_model(image, landmarks_dict, landmarks_ref_dict, multi
             
         large_scale_smoothing = model["edge_large_lengthscale"] / binning
         small_scale_smoothing = model["edge_small_lengthscale"] / binning
-        min_object_size = int(model["edge_size_threshold"] / (binning**2))   
+        min_object_size = min(int(model["edge_size_threshold"] / (binning**2)),1)   
         
         if ((prev_l_smoothing != large_scale_smoothing)
             or (prev_s_smoothing != small_scale_smoothing)
