@@ -1353,7 +1353,7 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
     # Get the positions of principal landmarks in a dictionary:
     landmarks_dict = dict(zip(df_model["name"], df_model["target"]))
     for lm_key in landmarks_dict.keys():
-        landmarks_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_dict[lm_key])))
+        landmarks_dict[lm_key] = np.array(ast.literal_eval(landmarks_dict[lm_key]))
 
     layout_graph = [
                     [sg.Graph(canvas_size=(canvas_width, canvas_height), graph_bottom_left=(0, 0),
@@ -1425,7 +1425,7 @@ def define_contours_model_window(shared, df_landmarks, df_model, df_files, df_co
                 y = y*binning
                 [x,y] = convert_graph_coordinates_to_image(x, y, width, height)
                 # Y,X definition: 
-                temp_values_dict['contour_seeds'].append([y,x]) 
+                temp_values_dict['contour_seeds'].append([x,y]) 
             except  Exception as e:
                 print(str(e))
                 pass
@@ -1580,8 +1580,8 @@ def save_contour_seeds(values, lmk_pos_dict, df_contours_model, points):
     p_start = lmk_pos_dict[row['contour_start'].values[0]]
     p_end   = lmk_pos_dict[row['contour_end'].values[0]]
     pts = reorder_points_from_start_to_end(points, p_start, p_end)
-    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, "seed_pts_x"] = str(list(pts[:,1]))
-    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, "seed_pts_y"] = str(list(pts[:,0]))
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, "seed_pts_x"] = str(list(pts[:,0]))
+    df_contours_model.loc[df_contours_model['contour_name'] == curr_contour, "seed_pts_y"] = str(list(pts[:,1]))
     return
 
 def calculate_alpha_from_slider(slider_value):
@@ -1614,29 +1614,6 @@ def compute_edges(image, contour_params):
     image_binned = image_binned/np.max(image_binned)
     return image_binned, edges_img
 
-def fit_contour_for_preview(image, contour_params, lmk_pos_dict):
-    energy = image**2
-    binning = contour_params['binning']
-    
-    pts_relative_seeds_x = np.array(ast.literal_eval(contour_params["seed_pts_x"]))
-    pts_relative_seeds_y = np.array(ast.literal_eval(contour_params["seed_pts_y"]))
-    pts_relative_seeds = np.array([pts_relative_seeds_y, pts_relative_seeds_x]).T
-    
-    p_start = lmk_pos_dict[contour_params['contour_start']]/binning
-    p_end   = lmk_pos_dict[contour_params['contour_end']]/binning
-    
-    alpha   = contour_params['energy_alpha']
-    rel_spacing = contour_params['contour_rel_spacing']
-    n_points = contour_params['n_points']
-    flip_pts = False
-    
-    points = fit_active_contour(energy, p_start, p_end, pts_relative_seeds, flip_pts, alpha, rel_spacing)
-    equispaced_points = find_equispaced_points_along_curve_with_spline(points, n_points)
-    # swapping the x,y because the contour fitting returns y,x:
-    points[:,[0, 1]] = points[:,[1, 0]]
-    equispaced_points[:,[0, 1]] = equispaced_points[:,[1, 0]]
-    return points, equispaced_points
-
 def draw_contour(window, points, width, height, color = "red", size = 15):
     for point in points:
         x, y = point
@@ -1650,17 +1627,14 @@ def view_contour_seeds_points(window, contour_params, lmk_pos_dict, width, heigh
     
     pts_relative_seeds_x = np.array(ast.literal_eval(contour_params["seed_pts_x"]))
     pts_relative_seeds_y = np.array(ast.literal_eval(contour_params["seed_pts_y"]))
-    pts_relative_seeds   = np.array([pts_relative_seeds_y, pts_relative_seeds_x]).T
+    pts_relative_seeds   = np.array([pts_relative_seeds_x, pts_relative_seeds_y]).T
     
     p_start = lmk_pos_dict[contour_params['contour_start']]/binning
     p_end   = lmk_pos_dict[contour_params['contour_end']]/binning
     
     # Move the relative seeds points:
     points_seeds = position_starting_points_active_contour(pts_relative_seeds, p_start, p_end, flip_pts = False)
-    
-    # swapping the x,y because the previous function returns y,x:
-    points_seeds[:,[0, 1]] = points_seeds[:,[1, 0]]
-    
+
     for point in points_seeds:
         x, y = point
         [x,y] = convert_image_coordinates_to_graph(x, y, width, height)
@@ -1699,7 +1673,27 @@ def update_view_contour_model(image, values, window, df_contours_model, landmark
     
     view_contour_seeds_points(window, contour_params, landmarks_dict, width, height, size = 30/binning)
     return
-        
+
+def fit_contour_for_preview(image, contour_params, lmk_pos_dict):
+    energy = image**2
+    binning = contour_params['binning']
+    
+    pts_relative_seeds_x = np.array(ast.literal_eval(contour_params["seed_pts_x"]))
+    pts_relative_seeds_y = np.array(ast.literal_eval(contour_params["seed_pts_y"]))
+    pts_relative_seeds = np.array([pts_relative_seeds_x, pts_relative_seeds_y]).T
+    
+    p_start = lmk_pos_dict[contour_params['contour_start']]/binning
+    p_end   = lmk_pos_dict[contour_params['contour_end']]/binning
+    
+    alpha   = contour_params['energy_alpha']
+    rel_spacing = contour_params['contour_rel_spacing']
+    n_points = contour_params['n_points']
+    flip_pts = False
+    
+    points = fit_active_contour(energy, p_start, p_end, pts_relative_seeds, flip_pts, alpha, rel_spacing)
+    equispaced_points = find_equispaced_points_along_curve_with_spline(points, n_points)
+
+    return points, equispaced_points     
 
 def update_sliders_contours_model_window(window, df_contours_model, contour):
     row = df_contours_model[df_contours_model['contour_name'] == contour]
@@ -1711,12 +1705,6 @@ def update_sliders_contours_model_window(window, df_contours_model, contour):
     window['-BINNING-'].update(row['binning'].values[0])
     window['-N-POINTS-'].update(row['n_points'].values[0])
     return
-
-
-
-
-
-
 
 
 #
@@ -1731,11 +1719,11 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
     
     
     for lm_key in landmarks_ref_dict.keys():
-        landmarks_ref_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_ref_dict[lm_key])))
+        landmarks_ref_dict[lm_key] = np.array(ast.literal_eval(landmarks_ref_dict[lm_key]))
 
     # Predict the floating landmarks for the reference image:
     floating_ref_lmks, contours = fit_multiple_contours_model(reference_image, landmarks_ref_dict, landmarks_ref_dict, df_contours_model, plot = False)
-    floating_ref_lmks = {key: str([value[1], value[0]]) for key, value in floating_ref_lmks.items()}
+    floating_ref_lmks = {key: str([value[0], value[1]]) for key, value in floating_ref_lmks.items()}
 
     df_ref_floating_lmks = pd.DataFrame(floating_ref_lmks, index=[0])
     
@@ -1762,13 +1750,13 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
         landmarks_dict = df_all_landmarks.query("`file name` == @file_name").drop(columns = ["file name"]).to_dict(orient='records')[0]
         
         for lm_key in landmarks_dict.keys():
-            landmarks_dict[lm_key] = np.flip( np.array(ast.literal_eval(landmarks_dict[lm_key])))
+            landmarks_dict[lm_key] = np.array(ast.literal_eval(landmarks_dict[lm_key]))
             
         # Predict the floating landmarks:
         floating_lmks, contours = fit_multiple_contours_model(img, landmarks_dict, landmarks_ref_dict, df_contours_model, plot = False)
         
         # Save the floating landmarks:
-        floating_lmks = {key: str([value[1], value[0]]) for key, value in floating_lmks.items()}
+        floating_lmks = {key: str([value[0], value[1]]) for key, value in floating_lmks.items()}
 
         floating_lmks_temp_df = pd.DataFrame(floating_lmks, index=[0])
         floating_lmks_temp_df['file name'] = file_name
