@@ -21,7 +21,7 @@ Here's what we're currently working on and planning for the future:
     - [x] Implement automated fitting of active contour along ridges and edges.
     - [x] Integrate floating landmarks derived from active contour fitting into the image registration process.
     - [x] Expand the GUI to allow manual review and editing of the automated active contour.
-    - [ ] Expand the GUI to define an active contour model for any new dataset.
+    - [x] Expand the GUI to define an active contour model for any new dataset.
 - [ ] Add a Comprehensive Test Dataset.
 - [ ] Add Complete Documentation.
 - [ ] Implement Logging for improved debugging and tracking.
