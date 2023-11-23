@@ -1077,8 +1077,7 @@ def CNN_load(window, values, shared):
     shared['CNN_model'] = Keras_load_model(values['-CNN-PATH-'])
     model_path, model_name = os.path.split(values['-CNN-PATH-'])
     window['-CNN-NAME-'].update(model_name)
-    return
-        
+    return  
         
 def CNN_train(window, train_folder, val_folder, df_model, shared, values):
     if shared['CNN_model']:
@@ -1767,7 +1766,12 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
         
     return shared
 
-def fit_contour_through_points(shared, df_contours_model, df_landmarks, df_floating_landmarks_manual):
+def fit_contour_through_points(shared, df_contours_model, df_landmarks, df_floating_landmarks_manual, df_predicted_landmarks = None):
+
+    # Merge manual landmarks and predicted landmarks:
+    df_all_landmarks = df_landmarks.copy()
+    if df_predicted_landmarks is not None:
+        df_all_landmarks.update(df_predicted_landmarks, overwrite=False)
 
     contour  = shared['curr_contour']
     filename = shared['curr_file']
@@ -1780,8 +1784,8 @@ def fit_contour_through_points(shared, df_contours_model, df_landmarks, df_float
     start_lmk = df_contours_model.query("`contour_name` == @contour")['contour_start'].values[0]
     end_lmk   = df_contours_model.query("`contour_name` == @contour")['contour_end'].values[0]
     
-    start_lmk_pos = ast.literal_eval( df_landmarks.query("`file name` == @filename")[start_lmk].values[0] )
-    end_lmk_pos   = ast.literal_eval( df_landmarks.query("`file name` == @filename")[end_lmk].values[0] )
+    start_lmk_pos = ast.literal_eval( df_all_landmarks.query("`file name` == @filename")[start_lmk].values[0] )
+    end_lmk_pos   = ast.literal_eval( df_all_landmarks.query("`file name` == @filename")[end_lmk].values[0] )
     
     # Order the points according to distance:
     curve_points = reorder_points_from_start_to_end(shared["contour_manual_pts"], start_lmk_pos, end_lmk_pos)
