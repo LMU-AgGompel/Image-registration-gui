@@ -1132,7 +1132,7 @@ def CNN_predict_landmarks(df_files, df_model, window, shared, values):
         window.Refresh()
         
         try:
-            image_registration.predict_lm(df_files, df_model, shared['CNN_model'], shared['proj_folder'], normalization=True, lmk_filename = df_predicted_landmarks_name, window = window)
+            image_registration.predict_landmarks(df_files, df_model, shared['CNN_model'], shared['proj_folder'], normalization=True, lmk_filename = df_predicted_landmarks_name, window = window)
             #threading.Thread(target = image_registration.predict_lm, args = (df_files, df_model, shared['CNN_model'], shared['proj_folder'], True, df_predicted_landmarks_name, window), daemon=True).start()
         except:
             window["-PRINT-"].update("An error occured during landmarks prediction.")
