@@ -473,6 +473,7 @@ def create_new_project():
             df_files["image quality"] = "undefined"
             df_files["notes"] = "none"
             df_files["annotated"] = "No"
+            df_files["registered"] = "No"
             
             df_files = df_files.drop_duplicates(subset='file name', keep="first")
             
@@ -892,6 +893,12 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             # Start looping through the images to register:
             for file_name in file_names:
                 
+                #Check if image has already been registered. Skip if value is 'Yes'
+                if df_files.loc[df_files["file name"] == file_name, "registered"].values[0] == 'Yes':
+                    loading_bar_i+=1
+                    registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
+                    continue
+                
                 # Open the source image:
                 file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
                 img = PIL.Image.open(file_path)
@@ -975,6 +982,9 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 # update the loading bar
                 loading_bar_i+=1
                 registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
+                
+                #Record registration complete by changing 'registered' to 'Yes'
+                df_files.loc[df_files["file name"]==file_name, 'registered'] = 'Yes'
 
             dialog_box.update(value='\n - All of the images have been registered')
             df_info = df_info.reset_index(drop=True)
