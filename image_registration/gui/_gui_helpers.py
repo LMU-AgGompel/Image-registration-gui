@@ -424,6 +424,10 @@ def create_new_project():
                sg.Input(size=(25,8), enable_events=True,  key="-NEW-MODEL-FILE-"),
                sg.FileBrowse(file_types=file_types_dfs)],
               
+              [sg.Text("Contour file: ", size=(20, 1)),
+               sg.Input(size=(25,8), enable_events=True,  key="-NEW-CONTOUR-FILE-"),
+               sg.FileBrowse(file_types=file_types_dfs)],
+              
               [sg.Button("Create the project: ", size = (20,1), key="-CREATE-PROJECT-")],
               
               [sg.Frame("Dialog box: ", layout = [[sg.Text("", key="-DIALOG-", size=(50, 10))]])]
@@ -488,6 +492,11 @@ def create_new_project():
             df_model = pd.read_csv(new_model_path)
             df_model.to_csv(os.path.join(project_folder, df_model_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe with model information copied in the project folder.')
+            
+            new_contour_path = values['-NEW-CONTOUR-FILE-']
+            df_contour_model = pd.read_csv(new_contour_path)
+            df_contour_model.to_csv(os.path.join(project_folder, df_contour_model_name), index=False)
+            dialog_box.update(value=dialog_box.get()+'\n - "Dataframe with contour information copied in the project folder.')
             
             try:
                 landmark_names = df_model['name'].values
