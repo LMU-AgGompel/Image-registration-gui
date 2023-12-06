@@ -801,6 +801,8 @@ def predict_landmarks(df_files, df_model, model, project_folder, normalization, 
             x = int(prediction[i, j, 0])
             y = int(prediction[i, j, 1])
             df_pred_lmk.loc[df_pred_lmk["file name"] == df_files["file name"][i], lmk] = str([x, y])
+        df_files.loc[df_files["file name"]==df_files["file name"][i], 'registered'] = 'No'
+        df_files.to_csv(project_folder + '/images_dataframe.csv', index= False)
 
     df_pred_lmk.to_csv(os.path.join(project_folder, lmk_filename))
 

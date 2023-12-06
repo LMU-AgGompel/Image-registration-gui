@@ -1754,6 +1754,15 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
     df_all_landmarks = df_landmarks.copy()
     if df_predicted_landmarks is not None:
         df_all_landmarks.update(df_predicted_landmarks, overwrite=False)
+    
+    #get old floating landmarks for comparison
+    if os.path.exists(shared['proj_folder']+'/'+df_floating_landmarks_name) == True:
+        #If floating landmarks detected previously, retrieve old values
+        df_floating_landmarks_previous = pd.read_csv(shared['proj_folder']+'/'+df_floating_landmarks_name)
+    else:
+            #Create a big empty dataframe
+            df_floating_landmarks_previous = pd.DataFrame(index=range(len(file_names)), columns=range(len(df_ref_floating_lmks.columns)))
+            df_floating_landmarks_previous['file name'] = file_names
 
     # Start looping through the images to register:
     all_floating_lmks = []
@@ -1779,6 +1788,12 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
         floating_lmks_temp_df = pd.DataFrame(floating_lmks, index=[0])
         floating_lmks_temp_df['file name'] = file_name
         all_floating_lmks.append(floating_lmks_temp_df)
+        
+        #If new floating landmarks differ from old, reset registration status
+        old_values = df_floating_landmarks_previous.loc[df_floating_landmarks_previous['file name'] == file_name]
+        if old_values.equals(floating_lmks_temp_df)==False:
+            df_files.loc[df_files["file name"]==shared['curr_file'], 'registered'] = 'No'
+            df_files.to_csv(shared['proj_folder'] + '/images_dataframe.csv', index= False)
     
     df_floating_landmarks = pd.concat(all_floating_lmks, ignore_index = True)
     df_floating_landmarks.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name), index=False)

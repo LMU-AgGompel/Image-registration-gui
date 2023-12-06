@@ -364,6 +364,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                     [x,y] = convert_graph_coordinates_to_image(x, y, shared['curr_image'].width, shared['curr_image'].height)
                     main_window["-PRINT-"].update('Position of landmark '+shared['curr_landmark']+' set to: ' + str([x, y]))
                     df_landmarks.loc[df_landmarks["file name"]==shared['curr_file'], shared['curr_landmark']] = str([x,y])
+                    df_files.loc[df_files["file name"]==shared['curr_file'], 'registered'] = 'No'
                     
             if shared['curr_image'] and (shared['curr_contour'] is not None):
                 
@@ -540,6 +541,9 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 shared["contour_manual_pts"] = []
                 refresh_landmarks_visualization(shared, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window)   
                 main_window["-PRINT-"].update('')
+                df_files.loc[df_files["file name"]==shared['curr_file'], 'registered'] = 'No'
+                main_window["-PRINT-"].update('Resest Registration Status: '+str(shared['curr_file']))
+                df_files.to_csv(shared['proj_folder'] + '/images_dataframe.csv', index= False)
                 
             else:
                 pass
