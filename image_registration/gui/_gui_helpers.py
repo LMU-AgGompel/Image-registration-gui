@@ -852,6 +852,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             # Index for loading bar:
             loading_bar_i=0   
             dialog_box.update(value='Registration started, this may take a while..')
+            registration_window.refresh()
             
             # Getting principal landmarks for the referece image:
             target_image_pts = []
@@ -887,8 +888,8 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             # which will also be saved in the destination folder:
                 
             df_info = pd.DataFrame(columns=['file name', 'channel', 'image quality', 'notes'])
-            
             dialog_box.update(value='Image registration in progress')
+            registration_window.refresh()
             
             #Check if landmarks for previous registrations are saved
             #Else create an empty dataframe with file names and NaN landmarks
@@ -908,6 +909,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 if os.path.exists(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)) == True:
                     #Check if new coordinates differ from old coordinates. If they're the same, skip registration.
                     old_landmarks = df_prv_lmk.loc[df_prv_lmk['file name'] == file_name]
+                    
                     if old_landmarks.equals(current_landmarks)==True:
                         loading_bar_i+=1
                         registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
@@ -955,7 +957,9 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 # Resize the image according to the slider value
                 size = warped.shape*np.array([values['-REGISTRATION-RESOLUTION-']/100, values['-REGISTRATION-RESOLUTION-']/100])
                 size = [int(x) for x in size]
-                warped = resize(warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
+                
+                if values['-REGISTRATION-RESOLUTION-'] < 100:
+                    warped = resize(warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
                 
                 # Save the registered image
                 destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)
@@ -982,7 +986,9 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                          ch_img = PIL.Image.open(ch_file_path)
                          ch_img = np.asarray(ch_img)
                          ch_warped = TPSwarping(ch_img, source_image_pts, target_image_pts, warped_shape)
-                         ch_warped = resize(ch_warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
+                         if values['-REGISTRATION-RESOLUTION-'] < 100:
+                             ch_warped = resize(ch_warped, size, preserve_range=True, anti_aliasing=True).astype('uint16')
+                         
                          ch_destination_path = os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], ch_file_name)
                          ch_warped_PIL = PIL.Image.fromarray(ch_warped)
                          ch_warped_PIL.save(ch_destination_path)
@@ -994,7 +1000,6 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 # save the info file:
                 df_info = df_info.reset_index(drop=True)
                 df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'), index = False)
-                    
 
                 # update the loading bar
                 loading_bar_i+=1
