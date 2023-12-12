@@ -854,7 +854,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             dialog_box.update(value='Registration started, this may take a while..')
             registration_window.refresh()
             
-            # Getting principal landmarks for the referece image:
+            # Getting principal landmarks for the reference image:
             target_image_pts = []
             landmarks_list = df_model["name"].values
             
@@ -1276,13 +1276,14 @@ def lmk_fine_tuning_window(shared, df_landmarks, df_predicted_landmarks, df_mode
                     [x_c,y_c] = convert_image_coordinates_to_graph(x_c, y_c, canvas_width, canvas_height)
                     lmk_fine_tune_window['-GRAPH-'].draw_point((x,y), size = 10, color = 'green')
                     lmk_fine_tune_window['-GRAPH-'].draw_point((x_c,y_c), size = 10, color = 'red')
-                    dialog_box.update("Fine tuned landmarks: green: original position, red: corrected position")
+                    dialog_box.update(value = "Fine tuned landmarks: green: original position, red: corrected position")
                 except Exception as e:
+                    dialog_box.update( value = "ERROR: \n" + str(e))
                     print(str(e))
                     pass
                 
         if event == "-APPL-LMK-CORRECT-":
-            fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, df_files, dialog_box)
+            fine_tune_all_landmarks(lmk_fine_tune_window, shared, binning, df_predicted_landmarks, df_model, df_files)
                 
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
@@ -1306,7 +1307,7 @@ def update_floating_lmks_fine_tuning_preview(window, values, binning, shared, im
     update_image_view(edges_img_PIL, window, '-GRAPH-', edges_img_PIL.width)
     return edges_img, shared
 
-def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, df_files, dialog_box):
+def fine_tune_all_landmarks(window, shared, binning, df_predicted_landmarks, df_model, df_files):
     # Get the images and their landmarks
     file_names = df_files["file name"].unique()
     file_count = len(file_names)
@@ -1315,13 +1316,14 @@ def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, d
     sigma_s = min(sigma_l, sigma_s)
     min_size = int(shared['edge_det_min_size']/binning)
     max_dist = int(shared['lmk_fine_tuning_max_dist']/binning)
-    dialog_box.update(value='Fine tuning of the landmarks in progress')
-    
+
+    window["-DIALOG-"].update(value='Fine tuning of the landmarks in progress')
+    window.refresh()
+        
     # Start looping through the images to register:
-    ij = 0
+    current_index = 0
+    tot_imgs = len(file_names)
     for file_name in file_names:
-        print(ij)
-        ij+=1
         # Open the source image:
         file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
         img = PIL.Image.open(file_path)
@@ -1343,9 +1345,12 @@ def fine_tune_all_landmarks(shared, binning, df_predicted_landmarks, df_model, d
                 df_predicted_landmarks.loc[df_predicted_landmarks["file name"]==file_name, landmark] = str([x_c,y_c])
             except:
                 pass
-            
-        dialog_box.update(value=dialog_box.get()+'\n - ' + file_name + ' has been processed')
-        
+        current_index += 1  
+        window["-DIALOG-"].update('Image '+str(current_index)+' of '+str(tot_imgs)+' has been processed.' )
+        window.refresh()
+    
+    window["-DIALOG-"].update('Automated lmks fine tuning completed.' )
+    window.refresh()
     df_predicted_landmarks.to_csv(os.path.join(shared['proj_folder'], df_predicted_landmarks_name), index = False)
 
     return
