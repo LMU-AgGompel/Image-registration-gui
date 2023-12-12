@@ -269,7 +269,7 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
         if event == 'LM-FLOATING':
             if df_contours_model is not None:
                 main_window["-PRINT-"].update("** Predicting floating landmarks in progress **") 
-                shared = floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_landmarks, df_predicted_landmarks)
+                shared = floating_lmks_detection(main_window, shared, df_model, df_contours_model, df_files, df_landmarks, df_predicted_landmarks)
                 main_window["-PRINT-"].update("** Prediction of floating landmarks completed **")
                 df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
                 df_ref_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_ref_floating_landmarks_name))

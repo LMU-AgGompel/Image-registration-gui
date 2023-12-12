@@ -1757,7 +1757,11 @@ def update_sliders_contours_model_window(window, df_contours_model, contour):
 #  ----------  Helper functions for detection of floating landmarks ---------- #
 #
 
-def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_landmarks, df_predicted_landmarks = None):
+def floating_lmks_detection(window, shared, df_model, df_contours_model, df_files, df_landmarks, df_predicted_landmarks = None):
+    
+    # Update the dialoge box:
+    window["-PRINT-"].update('Initializing floating landmarks detection.', text_color=('lime'))
+    window.refresh()
     
     # Get the reference image and its landmarks:
     reference_image = open_image_numpy(os.path.join(shared['proj_folder'], ref_image_name))
@@ -1786,8 +1790,13 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
 
     # Start looping through the images to register:
     all_floating_lmks = []
+    current_index  = 0
+    tot_imgs = len(file_names)
     
     for file_name in file_names:
+        # Updating dialogue box:
+        window["-PRINT-"].update('Detecting floating landmarks for image '+str(current_index)+' of '+str(tot_imgs))
+        window.refresh()
         
         # Open the image:
         file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
@@ -1808,8 +1817,11 @@ def floating_lmks_detection(shared, df_model, df_contours_model, df_files, df_la
         floating_lmks_temp_df = pd.DataFrame(floating_lmks, index=[0])
         floating_lmks_temp_df['file name'] = file_name
         all_floating_lmks.append(floating_lmks_temp_df)
+        current_index += 1  
         
-    
+        
+    window["-PRINT-"].update('Detection of floating landmarks completed.', text_color=('white'))
+    window.refresh()
     df_floating_landmarks = pd.concat(all_floating_lmks, ignore_index = True)
     df_floating_landmarks.to_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name), index=False)
         
