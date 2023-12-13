@@ -20,7 +20,7 @@ To run this code please install all the required python packages listed in the r
 	
 then, you can the start the GUI by running the start_GUI.py 
 
-	python ./start_GUI.py
+	python ./start_gui.py
 
 <!-- ROADMAP -->
 ## Current Roadmap
