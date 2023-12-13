@@ -1723,17 +1723,20 @@ def floating_lmks_detection(window, shared, df_model, df_contours_model, df_file
     for file_name in file_names:
         
         # Updating dialogue box:
-        window["-PRINT-"].update('Detecting floating landmarks for image '+str(current_index)+' of '+str(tot_imgs))
+        window["-PRINT-"].update('Detecting floating landmarks for image '+str(current_index)+' of '+str(tot_imgs), text_color=('lime'))
         window.refresh()
         
-        if only_on_new_images:
+        
+        file_in_df_flt_lmks = file_name in df_floating_landmarks["file name"].values
+        
+        if only_on_new_images and file_in_df_flt_lmks:
             # Check if floating landmarks already exists:
                 floating_lmks_temp_df = df_floating_landmarks[df_floating_landmarks["file name"] == file_name]
                 if floating_lmks_temp_df.isna().any().any():
                     pass
                 
                 else:
-                    # Skip image
+                    # Skip image, keep old floating landmarks:
                     all_floating_lmks.append(floating_lmks_temp_df)
                     current_index += 1  
                     continue
@@ -1745,8 +1748,14 @@ def floating_lmks_detection(window, shared, df_model, df_contours_model, df_file
         # Load the manual landmark positions:
         landmarks_dict = df_all_landmarks.query("`file name` == @file_name").drop(columns = ["file name"]).to_dict(orient='records')[0]
         
-        for lm_key in landmarks_dict.keys():
-            landmarks_dict[lm_key] = np.array(ast.literal_eval(landmarks_dict[lm_key]))
+        try:
+            for lm_key in landmarks_dict.keys():
+                landmarks_dict[lm_key] = np.array(ast.literal_eval(landmarks_dict[lm_key]))
+                
+        except ValueError:
+            window["-PRINT-"].update('ERROR: Some principal landmarks are missing for the current image.', text_color=('red'))
+            window.refresh()
+            continue
             
         # Predict the floating landmarks:
         floating_lmks, contours = fit_multiple_contours_model(img, landmarks_dict, landmarks_ref_dict, df_contours_model, plot = False)
