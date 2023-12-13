@@ -12,6 +12,16 @@ This project is still a work-in-progress and some features are not fully develop
 
 <img src="doc/figures/screenshot.png" width="800" align="center"/> 
 
+
+## Installation
+To run this code please install all the required python packages listed in the requirements.txt file with:
+
+	pip install requirements.txt
+	
+then, you can the start the GUI by running the start_GUI.py 
+
+	python ./start_GUI.py
+
 <!-- ROADMAP -->
 ## Current Roadmap
 
@@ -26,7 +36,6 @@ Here's what we're currently working on and planning for the future:
 - [ ] Add Complete Documentation.
 - [ ] Implement Logging for improved debugging and tracking.
 - [ ] Ensure Cross-Platform Compatibility.
-- [ ] Long-term Goal: Refactor the code to clearly separate backend and frontend for maintainability.
 
 
 <!-- LICENSE -->
