@@ -139,9 +139,6 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
                 df_files, df_landmarks = add_new_images(shared, df_files, df_landmarks, df_model)
                 shared, landmarks_window = refresh_gui_with_new_image(shared, df_files, df_model, df_landmarks, df_predicted_landmarks, df_floating_landmarks, df_ref_floating_landmarks, df_floating_landmarks_manual, main_window, landmarks_window)               
 
-        if event == '-MERGE-PROJECTS-':
-            merge_projects()
-            
         if event == '-REGISTRATION-':
             registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, df_files)
         
