@@ -800,24 +800,32 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             
             #Check if landmarks for previous registrations are saved
             #Else create an empty dataframe with file names and NaN landmarks
-            if os.path.exists(shared['proj_folder']+'/registration_metadata.csv') == True:
-                df_prv_lmk = pd.read_csv(shared['proj_folder']+'/registration_metadata.csv')
+            if os.path.exists(os.path.join(shared['proj_folder'],'registration_metadata.zip')):
+                metadata = pd.read_pickle(os.path.join(shared['proj_folder'],'registration_metadata.zip'))
             else:
-                df_prv_lmk = pd.DataFrame(columns = df_registration_landmarks.columns)
-                df_prv_lmk['file name']=file_names
+                metadata = pd.DataFrame(columns=['file name', 'fixed lmks', 'float lmks'])
+                metadata['file name']=file_names
+                metadata=metadata.set_index(['file name'])
             
             # Start looping through the images to register:
             for file_name in file_names:
                 
                 #Get landmarks for current file
                 current_landmarks = df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name]
+                try:
+                    current_floats = df_floating_landmarks.loc[df_floating_landmarks["file name"]==file_name]
+                except:
+                    current_floats = pd.DataFrame([file_name])
+                    pass
+                
+                fixed_previous = metadata.loc[file_name]['fixed lmks']
+                float_previous = metadata.loc[file_name]['float lmks']
                 
                 #Check if image has already been registered. Pass if not.
-                if os.path.exists(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)) == True:
+                if os.path.exists(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)):
                     #Check if new coordinates differ from old coordinates. If they're the same, skip registration.
-                    old_landmarks = df_prv_lmk.loc[df_prv_lmk['file name'] == file_name]
-                    
-                    if old_landmarks.equals(current_landmarks)==True:
+                    if current_landmarks[sorted(current_landmarks)].equals(fixed_previous[sorted(fixed_previous)]) and \
+                        current_floats[sorted(current_floats)].equals(float_previous[sorted(float_previous)]):
                         loading_bar_i+=1
                         registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
                         continue
@@ -913,8 +921,9 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
                 
                 #Update previous coordinates dataframe and save as csv file
-                df_prv_lmk.loc[df_prv_lmk['file name']==file_name]=current_landmarks
-                df_prv_lmk.to_csv((shared['proj_folder'] + '/registration_metadata.csv'),index=False)
+                metadata.loc[file_name]['fixed lmks']=current_landmarks
+                metadata.loc[file_name]['float lmks']=current_floats
+                metadata.to_pickle(os.path.join(shared['proj_folder'],'registration_metadata.zip'))
 
             dialog_box.update(value='\n - All of the images have been registered')
             df_info = df_info.reset_index(drop=True)
