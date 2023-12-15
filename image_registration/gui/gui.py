@@ -76,10 +76,11 @@ def start_image_registration_GUI(main_window_size = (1200,1100), graph_canvas_wi
 
         if event == sg.WIN_CLOSED or event == 'Exit':
             # if closing the main window, exit program
-            if window == main_window:    
+            if window == main_window:
                 break
             # otherwise, do nothing
-            else:                     
+            else:         
+                event = ""
                 pass
         
         if event == '-LOAD-PROJECT-':
