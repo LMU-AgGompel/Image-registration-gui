@@ -576,7 +576,7 @@ def add_new_images(shared, df_files, df_landmarks, df_model):
             for landmark in landmark_names:
                 temp_df_landmarks[landmark] = np.nan
                 
-            df_landmarks = pd.concat([df_landmarks, temp_df_files])
+            df_landmarks = pd.concat([df_landmarks, temp_df_landmarks])
             df_landmarks = df_landmarks.reset_index(drop=True)
             df_landmarks.to_csv(os.path.join(project_folder, df_landmarks_name), index=False)
             dialog_box.update(value=dialog_box.get()+'\n - "Dataframe for landmarks coordinates updated.')
