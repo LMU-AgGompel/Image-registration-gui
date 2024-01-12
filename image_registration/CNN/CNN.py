@@ -602,7 +602,7 @@ def train_CNN_with_window_callback(train_folder, val_folder, proj_folder, df_mod
     None.
     """
     X_train, X_test, y_train, y_test = import_train_val_data(train_folder, val_folder, df_model)
-    callbacks_list = [window_callback(window, nb_epochs, proj_folder, model_name=model_name)]
+    callbacks_list = [WindowCallback(window, nb_epochs, proj_folder, model_name=model_name)]
 
     threading.Thread(target=train_CNN,
                      args=(X_train, y_train, X_test, y_test, CNN_model_object,
