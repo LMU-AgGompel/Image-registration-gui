@@ -10,6 +10,14 @@
 
 
 import numpy as np
+import pyximport
+
+# Installing Cython with support for reloading and setting language level 3
+pyximport.install(reload_support=True, language_level=3)
+
+# Importing the custom Cython module:
+from _TPS_helpers_cython import cython_d
+from _TPS_helpers_cython import cython_u
 
 class TPS:       
     @staticmethod
@@ -35,11 +43,13 @@ class TPS:
         
     @staticmethod
     def d(a, b):
-        return np.sqrt(np.square(a[:, None, :2] - b[None, :, :2]).sum(-1))
+        return cython_d(a,b)
+        #return np.sqrt(np.square(a[:, None, :2] - b[None, :, :2]).sum(-1))
 
     @staticmethod
     def u(r):
-        return r**2 * np.log(r + 1e-6)
+        return cython_u(r)
+        #return r**2 * np.log(r + 1e-6)
 
     @staticmethod
     def z(x, c, theta):

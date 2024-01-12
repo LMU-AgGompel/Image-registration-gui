@@ -9,11 +9,23 @@
 # ============================================================
 
 if __name__ == '__main__':
+    # compile cython functions:
+    import pyximport
+    pyximport.install(reload_support=True, language_level=3)
+    
+    from _TPS_helpers_cython import *
     from _TPS_helpers import *
+    
     from PIL import Image
     import numpy as np
+    import time
     from matplotlib import pyplot as plt
 else:
+    # compile cython functions:
+    import pyximport
+    pyximport.install(reload_support=True, language_level=3)
+    
+    from _TPS_helpers_cython import *
     from ._TPS_helpers import *
     
 from scipy import ndimage
@@ -70,7 +82,7 @@ if __name__ == '__main__':
     from pathlib import Path
     import os
     parent = Path(__file__).parents[2]
-    img_path = os.path.join(os.path.join(parent,"test_data"),"image.png")
+    img_path = os.path.join(os.path.join(parent,"test_data"),"image_large.png")
     img = Image.open(img_path)
     img = np.asarray(img)[:,:,2]
     
@@ -91,7 +103,10 @@ if __name__ == '__main__':
         [0.4, 0.4],
         [0.6, 0.6],
     ])
-        
-    warped = TPSwarping(img, c_src, c_dst, dshape=img.shape)
+    start = time.time()
+    for i in range(10):
+        warped = TPSwarping(img, c_src, c_dst, dshape=img.shape)
+    end = time.time()
+    print("Warping time: "+str(end-start))
     show_warped(img, warped)
 
