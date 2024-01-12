@@ -5,4 +5,4 @@ matplotlib==3.7.1
 tensorflow==2.9.1
 scikit-image==0.19.3
 scipy==1.7.3
-
+cython==3.0.6
