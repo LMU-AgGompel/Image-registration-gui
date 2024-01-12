@@ -10,15 +10,16 @@
 
 
 import numpy as np
-import pyximport
-
-# Installing Cython with support for reloading and setting language level 3
-pyximport.install(reload_support=True, language_level=3)
 
 # Importing the custom Cython module:
-from _TPS_helpers_cython import cython_d
-from _TPS_helpers_cython import cython_u
+if __name__ == "_TPS_helpers":
+    from _TPS_helpers_cython import cython_d
+    from _TPS_helpers_cython import cython_u
 
+if __name__ == "image_registration.registration._TPS_helpers":
+    from ._TPS_helpers_cython import cython_d
+    from ._TPS_helpers_cython import cython_u
+    
 class TPS:       
     @staticmethod
     def fit(c, lambd=0., reduced=False):        

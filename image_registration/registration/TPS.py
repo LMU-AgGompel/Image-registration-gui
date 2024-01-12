@@ -25,7 +25,7 @@ else:
     import pyximport
     pyximport.install(reload_support=True, language_level=3)
     
-    from _TPS_helpers_cython import *
+    from ._TPS_helpers_cython import *
     from ._TPS_helpers import *
     
 from scipy import ndimage
