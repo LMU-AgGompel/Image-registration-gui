@@ -800,24 +800,31 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
             
             #Check if landmarks for previous registrations are saved
             #Else create an empty dataframe with file names and NaN landmarks
-            if os.path.exists(shared['proj_folder']+'/registration_metadata.csv') == True:
-                df_prv_lmk = pd.read_csv(shared['proj_folder']+'/registration_metadata.csv')
+            if os.path.exists(os.path.join(shared['proj_folder'],'registration_metadata.zip')):
+                metadata = pd.read_pickle(os.path.join(shared['proj_folder'],'registration_metadata.zip'))
             else:
-                df_prv_lmk = pd.DataFrame(columns = df_registration_landmarks.columns)
-                df_prv_lmk['file name']=file_names
+                metadata = pd.DataFrame(columns=['file name', 'fixed lmks', 'float lmks'])
+                metadata['file name']=file_names
+                metadata=metadata.set_index(['file name'])
             
             # Start looping through the images to register:
             for file_name in file_names:
-                
                 #Get landmarks for current file
                 current_landmarks = df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name]
+                try:
+                    current_floats = df_floating_landmarks.loc[df_floating_landmarks["file name"]==file_name]
+                except:
+                    current_floats = pd.DataFrame([file_name])
+                    pass
+                
+                fixed_previous = metadata.loc[file_name]['fixed lmks']
+                float_previous = metadata.loc[file_name]['float lmks']
                 
                 #Check if image has already been registered. Pass if not.
-                if os.path.exists(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)) == True:
+                if os.path.exists(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'], file_name)):
                     #Check if new coordinates differ from old coordinates. If they're the same, skip registration.
-                    old_landmarks = df_prv_lmk.loc[df_prv_lmk['file name'] == file_name]
-                    
-                    if old_landmarks.equals(current_landmarks)==True:
+                    if current_landmarks[sorted(current_landmarks)].equals(fixed_previous[sorted(fixed_previous)]) and \
+                        current_floats[sorted(current_floats)].equals(float_previous[sorted(float_previous)]):
                         loading_bar_i+=1
                         registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
                         continue
@@ -833,7 +840,7 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 
                 # Getting principal landmarks:
                 source_image_pts=[]
- 
+                
                 for LM in landmarks_list:
                     try:
                         [x, y] = ast.literal_eval(df_registration_landmarks.loc[df_registration_landmarks["file name"]==file_name, LM].values[0])
@@ -844,11 +851,11 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                 # Check if some landmarks are missing, and skip the image:
                 if len(source_image_pts) != len(landmarks_list):
                     loading_bar_i+=1
-                    continue 
+                    #continue 
                 
                 # Getting floating landmarks:
                 if df_floating_landmarks is not None:
-
+                
                     for fl_lmk in floating_landmarks_names:
                         [x,y] = ast.literal_eval(df_floating_landmarks.loc[df_floating_landmarks["file name"]==file_name, fl_lmk].values[0])
                         source_image_pts.append([x,y])
@@ -903,18 +910,20 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
                          df_info_row = pd.DataFrame(df_info_row_data, columns=df_info_row_columns)
                          df_info = pd.concat([df_info_row, df_info])
                          dialog_box.update(value=dialog_box.get()+'\n - ' + ch_file_name + ' has been registered')
-
+                
                 # save the info file:
                 df_info = df_info.reset_index(drop=True)
                 df_info.to_csv(os.path.join(values['-REGISTERED-IMAGES-FOLDER-'],'dataframe_info.csv'), index = False)
-
+                
                 # update the loading bar
                 loading_bar_i+=1
                 registration_window["-PROGRESS-"].update((loading_bar_i/file_count)*100)
                 
                 #Update previous coordinates dataframe and save as csv file
-                df_prv_lmk.loc[df_prv_lmk['file name']==file_name]=current_landmarks
-                df_prv_lmk.to_csv((shared['proj_folder'] + '/registration_metadata.csv'),index=False)
+                metadata.loc[file_name]['fixed lmks']=current_landmarks
+                metadata.loc[file_name]['float lmks']=current_floats
+                metadata.to_pickle(os.path.join(shared['proj_folder'],'registration_metadata.zip'))
+                
 
             dialog_box.update(value='\n - All of the images have been registered')
             df_info = df_info.reset_index(drop=True)
@@ -925,6 +934,9 @@ def registration_window(shared, df_landmarks, df_predicted_landmarks, df_model, 
         
     registration_window.close()    
     return
+
+#def registration(file_name, df_registration_landmarks, df_floating_landmarks, metadata, values, loading_bar_i, file_count, df_files, landmarks_list):
+    
 
 def create_channels_dataframe(df_files, folders, ref_channel, dialog_box):
     """
@@ -1671,8 +1683,13 @@ def floating_lmks_detection(window, shared, df_model, df_contours_model, df_file
     window.refresh()
     
     # Pop-up window to ask if floating-lmks should only be predicted for new images:
-    only_on_new_images = sg.popup_yes_no('Predict floating landmarks only for new images?') 
-    only_on_new_images = only_on_new_images and  os.path.exists(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
+    only_on_new_images = sg.popup_yes_no('Predict floating landmarks only for new images?')
+    
+    if only_on_new_images  and not os.path.exists(os.path.join(shared['proj_folder'], df_floating_landmarks_name)):
+        only_on_new_images = False
+        window["-PRINT-"].update('No previous floating landmarks, revert to predicting floating lmks on all images.')
+        window.refresh()
+        
     if only_on_new_images:
         df_floating_landmarks = pd.read_csv(os.path.join(shared['proj_folder'], df_floating_landmarks_name))
         # check that the contours in the contour model are consistent with previous floating landmarks:
@@ -1726,20 +1743,20 @@ def floating_lmks_detection(window, shared, df_model, df_contours_model, df_file
         window["-PRINT-"].update('Detecting floating landmarks for image '+str(current_index)+' of '+str(tot_imgs), text_color=('lime'))
         window.refresh()
         
+        if only_on_new_images:
+            file_in_df_flt_lmks = file_name in df_floating_landmarks["file name"].values
         
-        file_in_df_flt_lmks = file_name in df_floating_landmarks["file name"].values
-        
-        if only_on_new_images and file_in_df_flt_lmks:
-            # Check if floating landmarks already exists:
-                floating_lmks_temp_df = df_floating_landmarks[df_floating_landmarks["file name"] == file_name]
-                if floating_lmks_temp_df.isna().any().any():
-                    pass
-                
-                else:
-                    # Skip image, keep old floating landmarks:
-                    all_floating_lmks.append(floating_lmks_temp_df)
-                    current_index += 1  
-                    continue
+            if file_in_df_flt_lmks:
+                # Check if floating landmarks already exists:
+                    floating_lmks_temp_df = df_floating_landmarks[df_floating_landmarks["file name"] == file_name]
+                    if floating_lmks_temp_df.isna().any().any():
+                        pass
+                    
+                    else:
+                        # Skip image, keep old floating landmarks:
+                        all_floating_lmks.append(floating_lmks_temp_df)
+                        current_index += 1  
+                        continue
         
         # Open the image:
         file_path = df_files.loc[df_files["file name"] == file_name, "full path"].values[0]
