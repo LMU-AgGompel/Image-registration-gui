@@ -1,5 +1,5 @@
 pandas==1.5.2
-Pillow==9.4.0
+Pillow==10.0.1
 PySimpleGUI==4.60.5
 matplotlib==3.7.1
 tensorflow==2.9.1
